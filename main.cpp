@@ -10,6 +10,10 @@
 #include <fstream>
 #include <vector>
 #include <algorithm>
+#include <cmath>
+#include <cstdio>
+
+#include <Kinect.h>
 
 #include "stb_image.h"
 
@@ -23,10 +27,15 @@ void mouseCallback(GLFWwindow* window, double posX, double posY);
 void scrollCallback(GLFWwindow* window, double offsetX, double offsetY);
 
 // drawing functions
-void displayGrid(Shader* shader, unsigned int gridVAO, unsigned int gridEBO, int numVertices);
-void displayCube(Shader* shader, unsigned int cubeVAO, unsigned int cubeEBO, int numVertices);
-void displayCoordSystem(Shader* shader, unsigned int coordVAO, unsigned int coordEBO, int numVertices);
-void displaySkeleton(Shader* shader, unsigned int skeletonVAO, unsigned int skeletonEBO, int numVertices);
+void drawGrid(Shader* shader, unsigned int gridVAO, unsigned int gridEBO, int numVertices);
+void drawCube(Shader* shader, unsigned int cubeVAO, unsigned int cubeEBO, int numVertices);
+void drawCoordSystem(Shader* shader, unsigned int coordVAO, unsigned int coordEBO, int numVertices);
+void drawSkeleton(Shader* shader, unsigned int skeletonVAO, unsigned int skeletonEBO, int numVertices);
+void drawKinectData();
+
+// Kinect functions
+bool initKinect();
+void getBodyData(IMultiSourceFrame* frame);
 
 // Window settings
 const unsigned int WIN_WIDTH = 1920;
@@ -42,6 +51,13 @@ float fov = 45.0f;
 // Time handling
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
+
+// Kinect handling
+bool tracked;
+Joint joints[JointType_Count];
+IKinectSensor* kinect;             // Kinect sensor
+IMultiSourceFrameReader* reader;   // Kinect data source
+ICoordinateMapper* mapper;         // Converts between depth, color, and 3d coordinates
 
 int main() {
 
@@ -73,6 +89,8 @@ int main() {
 
     Shader shader("../Shaders/vertexShader.vert", "../Shaders/fragmentShader.frag");
     float currentFrame;
+
+    initKinect();
 
     float gridVertices[] = {
 
@@ -325,10 +343,10 @@ int main() {
 
         processInput(window);
 
-        displayGrid(&shader, gridVAO, gridEBO, sizeof(gridIndices));
-        // displayCube(&shader, cubeVAO, cubeEBO, sizeof(cubeIndices));
-        displayCoordSystem(&shader, coordVAO, coordEBO, sizeof(coordIndices));
-        displaySkeleton(&shader, skeletonVAO, skeletonEBO, sizeof(skeletonIndices));
+        drawGrid(&shader, gridVAO, gridEBO, sizeof(gridIndices));
+        // drawCube(&shader, cubeVAO, cubeEBO, sizeof(cubeIndices));
+        drawCoordSystem(&shader, coordVAO, coordEBO, sizeof(coordIndices));
+        drawSkeleton(&shader, skeletonVAO, skeletonEBO, sizeof(skeletonIndices));
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -401,7 +419,7 @@ void processInput(GLFWwindow* window) {
 
 }
 
-void displayGrid(Shader* shader, unsigned int gridVAO, unsigned int gridEBO, int numVertices) {
+void drawGrid(Shader* shader, unsigned int gridVAO, unsigned int gridEBO, int numVertices) {
 
     glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -428,7 +446,7 @@ void displayGrid(Shader* shader, unsigned int gridVAO, unsigned int gridEBO, int
     }
 }
 
-void displayCube(Shader* shader, unsigned int cubeVAO, unsigned int cubeEBO, int numVertices) {
+void drawCube(Shader* shader, unsigned int cubeVAO, unsigned int cubeEBO, int numVertices) {
 
     glLineWidth(4.0f);
 
@@ -441,7 +459,7 @@ void displayCube(Shader* shader, unsigned int cubeVAO, unsigned int cubeEBO, int
 
 }
 
-void displaySkeleton(Shader* shader, unsigned int skeletonVAO, unsigned int skeletonEBO, int numVertices) {
+void drawSkeleton(Shader* shader, unsigned int skeletonVAO, unsigned int skeletonEBO, int numVertices) {
 
     glLineWidth(7.0f);
 
@@ -454,7 +472,7 @@ void displaySkeleton(Shader* shader, unsigned int skeletonVAO, unsigned int skel
     
 }
 
-void displayCoordSystem(Shader* shader, unsigned int coordVAO, unsigned int coordEBO, int numVertices) {
+void drawCoordSystem(Shader* shader, unsigned int coordVAO, unsigned int coordEBO, int numVertices) {
 
     glLineWidth(5.0f);
 
@@ -464,5 +482,79 @@ void displayCoordSystem(Shader* shader, unsigned int coordVAO, unsigned int coor
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     glDrawElements(GL_LINES, numVertices, GL_UNSIGNED_INT, nullptr);
+
+}
+
+void drawKinectData() {
+    // ...
+    if (tracked) {
+        // Draw some arms
+        const CameraSpacePoint& lh = joints[JointType_WristLeft].Position;
+        const CameraSpacePoint& le = joints[JointType_ElbowLeft].Position;;
+        const CameraSpacePoint& ls = joints[JointType_ShoulderLeft].Position;;
+        const CameraSpacePoint& rh = joints[JointType_WristRight].Position;;
+        const CameraSpacePoint& re = joints[JointType_ElbowRight].Position;;
+        const CameraSpacePoint& rs = joints[JointType_ShoulderRight].Position;;
+        glBegin(GL_LINES);
+        glColor3f(1.f, 0.f, 0.f);
+        // lower left arm
+        glVertex3f(lh.X, lh.Y, lh.Z);
+        glVertex3f(le.X, le.Y, le.Z);
+        // upper left arm
+        glVertex3f(le.X, le.Y, le.Z);
+        glVertex3f(ls.X, ls.Y, ls.Z);
+        // lower right arm
+        glVertex3f(rh.X, rh.Y, rh.Z);
+        glVertex3f(re.X, re.Y, re.Z);
+        // upper right arm
+        glVertex3f(re.X, re.Y, re.Z);
+        glVertex3f(rs.X, rs.Y, rs.Z);
+        glEnd();
+    }
+}
+
+bool initKinect() {
+
+    if(!GetDefaultKinectSensor(&kinect)) {
+        std::cout << "Failed to get Kinect sensor." << std::endl;
+        return false;
+    }
+    if(kinect) {
+        kinect->get_CoordinateMapper(&mapper);
+        kinect->Open();
+        kinect->OpenMultiSourceFrameReader(FrameSourceTypes::FrameSourceTypes_Color |
+                                           FrameSourceTypes::FrameSourceTypes_Depth |
+                                           FrameSourceTypes::FrameSourceTypes_Body, &reader);
+        std::cout << "Kinect sensor initialized." << std::endl;
+        return reader;
+    }
+    else {
+        std::cout << "Couldn't open Kinect sensor." << std::endl;
+        return false;
+    }
+
+}
+
+void getBodyData(IMultiSourceFrame* frame) {
+
+    IBodyFrame* bodyframe;
+    IBodyFrameReference* frameref = nullptr;
+    frame->get_BodyFrameReference(&frameref);
+    frameref->AcquireFrame(&bodyframe);
+    if (frameref) frameref->Release();
+
+    if (!bodyframe) return;
+
+    IBody* body[BODY_COUNT];
+    bodyframe->GetAndRefreshBodyData(BODY_COUNT, body);
+    for (int i = 0; i < BODY_COUNT; i++) {
+        body[i]->get_IsTracked(&tracked);
+        if (tracked) {
+            body[i]->GetJoints(JointType_Count, joints);
+            break;
+        }
+    }
+
+    if (bodyframe) bodyframe->Release();
 
 }
