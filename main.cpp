@@ -22,13 +22,18 @@ void processInput(GLFWwindow* window);
 void mouseCallback(GLFWwindow* window, double posX, double posY);
 void scrollCallback(GLFWwindow* window, double offsetX, double offsetY);
 
-void display(Shader* shader, unsigned int VAO, unsigned int EBO);
+// drawing functions
+void displayGrid(Shader* shader, unsigned int gridVAO, unsigned int gridEBO, int numVertices);
+void displayCube(Shader* shader, unsigned int cubeVAO, unsigned int cubeEBO, int numVertices);
+void displayCoordSystem(Shader* shader, unsigned int coordVAO, unsigned int coordEBO, int numVertices);
+void displaySkeleton(Shader* shader, unsigned int skeletonVAO, unsigned int skeletonEBO, int numVertices);
+
 // Window settings
 const unsigned int WIN_WIDTH = 1920;
 const unsigned int WIN_HEIGHT = 1080;
 
 // Camera handling
-Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
+Camera camera(glm::vec3(0.0f, 5.0f, 3.0f));
 double lastX = (float)WIN_WIDTH / 2;
 double lastY = (float)WIN_HEIGHT / 2;
 bool firstMouse = true;
@@ -71,31 +76,188 @@ int main() {
 
     float gridVertices[] = {
 
-            // position          // color
-            -10.0f, -1.0f, 0.0f,    1.0f, 1.0f, 1.0f,
-            -9.75f, -1.0f, 0.0f,    1.0f, 1.0f, 1.0f,
-            -9.75f, -1.0f, -10.25f,    1.0f, 1.0f, 1.0f,
-            -10.0f, -1.0f, -10.25f,    1.0f, 1.0f, 1.0f
+            // position             // color
+            0.0f, 0.0f, 0.0f,    1.0f, 1.0f, 1.0f,
+            0.25f, 0.0f, 0.0f,    1.0f, 1.0f, 1.0f,
+            0.25f, 0.0f, 0.25f,    1.0f, 1.0f, 1.0f,
+            0.0f, 0.0f, 0.25f,    1.0f, 1.0f, 1.0f
 
     };
 
-    unsigned int indices[] = {
+    unsigned int gridIndices[] = {
 
             0, 1, 2, 3
 
     };
 
-    unsigned int VAO, VBO, EBO;
-    glGenVertexArrays(1, &VAO);
-    glBindVertexArray(VAO);
+    float cubeVertices[] {
 
-    glGenBuffers(1, &VBO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        // position          // color
+        6.0f, 0.0f, 6.0f,    0.0f, 0.5f, 0.0f,
+        5.0f, 0.0f, 6.0f,    0.0f, 0.5f, 0.0f,
+        5.0f, 1.0f, 6.0f,    0.0f, 0.5f, 0.0f,
+        6.0f, 1.0f, 6.0f,    0.0f, 0.5f, 0.0f,
+
+        6.0f, 0.0f, 5.0f,    0.0f, 0.5f, 0.0f,
+        5.0f, 0.0f, 5.0f,    0.0f, 0.5f, 0.0f,
+        5.0f, 1.0f, 5.0f,    0.0f, 0.5f, 0.0f,
+        6.0f, 1.0f, 5.0f,    0.0f, 0.5f, 0.0f,
+
+    };
+
+    unsigned int cubeIndices[] = {
+
+        0, 1, 2,    // front face
+        0, 2, 3,
+        4, 5, 6,    // back face
+        4, 6, 7,
+        2, 7, 3,    // upper face
+        2, 6, 7,
+        0, 1, 4,    // lower face
+        1, 5, 4,
+        4, 3, 7,    // left face
+        4, 0, 3,
+        1, 5, 2,    // right face
+        5, 6, 2
+
+    };
+
+    float coordSystemVertices[] = {
+
+            -1.0f, 0.0f, 0.0f,    0.0f, 0.0f, 1.0f,    // X-axis -- BLUE
+            4.0f, 0.0f, 0.0f,    0.0f, 0.0f, 1.0f,
+
+            0.0f, -1.0f, 0.0f,    1.0f, 0.0f, 0.0f,    // Y-axis -- RED
+            0.0f, 4.0f, 0.0f,    1.0f, 0.0f, 0.0f,
+
+            0.0f, 0.0f, -1.0f,    0.0f, 1.0f, 0.0f,    // Z-axis -- GREEN
+            0.0f, 0.0f, 4.0f,    0.0f, 1.0f, 0.0f,
+
+            3.75f, -0.2f, 0.0f,    0.0f, 0.0f, 1.0f,    // X-arrow
+            3.75f, 0.2, 0.0f,    0.0f, 0.0f, 1.0f,
+
+            0.1f, 3.75f, -0.1f,    1.0f, 0.0f, 0.0f,    // Y-arrow
+            -0.1f, 3.75f, 0.1f,    1.0f, 0.0f, 0.0f,
+
+            0.0f, -0.2f, 3.75f,    0.0f, 1.0f, 0.0f,    // Z-arrow
+            0.0f, 0.2f, 3.75f,    0.0f, 1.0f, 0.0f,
+
+    };
+
+    unsigned int coordIndices[] = {
+
+            0, 1,
+            2, 3,
+            4, 5,
+            1, 7,
+            1, 6,
+            3, 8,
+            3, 9,
+            5, 10,
+            5, 11
+
+
+    };
+
+    float skeletonVertices[] = {
+
+        1.5f, 0.0f, 1.75f,    1.0f, 0.0f, 1.0f,
+        1.5f, 0.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // RIGHT FOOT
+
+        2.5f, 0.0f, 1.75f,    1.0f, 0.0f, 1.0f,
+        2.5f, 0.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // LEFT FOOT
+
+        1.5f, 2.0f, 1.2f,    1.0f, 0.0f, 1.0f,    // RIGHT KNEE
+        2.5f, 2.0f, 1.2f,    1.0f, 0.0f, 1.0f,    // LEFT KNEE
+
+        1.5f, 4.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // RIGHT HIP
+        2.5f, 4.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // LEFT HIP
+
+        2.0f, 5.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // PELVIS
+
+        2.0f, 7.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // NECK
+
+        2.0f, 8.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // TOP HEAD
+
+        1.0f, 7.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // RIGHT SHOULDER
+        3.0f, 7.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // LEFT SHOULDER
+
+        0.5f, 5.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // RIGHT ELBOW
+        3.5f, 5.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // LEFT ELBOW
+
+        0.5f, 3.0f, 1.2f,    1.0f, 0.0f, 1.0f,    // RIGHT WRIST
+        3.5f, 3.0f, 1.2f,    1.0f, 0.0f, 1.0f,    // LEFT WRIST
+
+        0.6f, 2.75f, 1.27f,    1.0f, 0.0f, 1.0f,    // RIGHT THUMB
+        3.4f, 2.75f, 1.27f,    1.0f, 0.0f, 1.0f,    // LEFT THUMB
+
+        0.375f, 2.5f, 1.27f,    1.0f, 0.0f, 1.0f,    // RIGHT THUMB
+        3.625f, 2.5f, 1.27f,    1.0f, 0.0f, 1.0f,    // LEFT THUMB
+
+    };
+
+    unsigned int skeletonIndices[] = {
+
+            0, 1,
+            2, 3,
+            1, 4,
+            3, 5,
+            4, 6,
+            5, 7,
+            6, 8,
+            7, 8,
+            8, 9,
+            9, 10,
+            9, 11,
+            9, 12,
+            11, 13,
+            13, 15,
+            15, 17,
+            15, 19,
+            12, 14,
+            14, 16,
+            16, 18,
+            16, 20,
+            17, 19,
+            18, 20
+
+    };
+
+    // --------------------- GRID ------------------------------
+    unsigned int gridVAO, gridVBO, gridEBO;
+    glGenVertexArrays(1, &gridVAO);
+    glBindVertexArray(gridVAO);
+
+    glGenBuffers(1, &gridVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, gridVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(gridVertices), gridVertices, GL_STATIC_DRAW);
 
-    glGenBuffers(1, &EBO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+    glGenBuffers(1, &gridEBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gridEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(gridIndices), gridIndices, GL_STATIC_DRAW);
+
+    // position
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_TRUE, 6 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(0);
+
+    // color
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    // --------------------- CUBE ------------------------------
+
+    unsigned int cubeVAO, cubeVBO, cubeEBO;
+
+    glGenVertexArrays(1, &cubeVAO);
+    glBindVertexArray(cubeVAO);
+
+    glGenBuffers(1, &cubeVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
+
+    glGenBuffers(1, &cubeEBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), cubeIndices, GL_STATIC_DRAW);
 
     // position
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_TRUE, 6 * sizeof(float), nullptr);
@@ -106,7 +268,52 @@ int main() {
     glEnableVertexAttribArray(1);
 
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    glLineWidth(3.0f);
+
+    // ---------------------- COORDINATE SYSTEM ------------------------
+
+    unsigned int coordVAO, coordVBO, coordEBO;
+    glGenVertexArrays(1, &coordVAO);
+    glBindVertexArray(coordVAO);
+
+    glGenBuffers(1, &coordVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, coordVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(coordSystemVertices), coordSystemVertices, GL_STATIC_DRAW);
+
+    glGenBuffers(1, &coordEBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(coordIndices), coordIndices, GL_STATIC_DRAW);
+
+    // position
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_TRUE, 6 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(0);
+
+    // color
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    glPointSize(15.0f);
+
+    // ---------------------- SKELETON -----------------------------------
+
+    unsigned int skeletonVAO, skeletonVBO, skeletonEBO;
+    glGenVertexArrays(1, &skeletonVAO);
+    glBindVertexArray(skeletonVAO);
+
+    glGenBuffers(1, &skeletonVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, skeletonVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(skeletonVertices), skeletonVertices, GL_STATIC_DRAW);
+
+    glGenBuffers(1, &skeletonEBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, skeletonEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(skeletonIndices), skeletonIndices, GL_STATIC_DRAW);
+
+    // position
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_TRUE, 6 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(0);
+
+    // color
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
 
     shader.use();
 
@@ -118,14 +325,27 @@ int main() {
 
         processInput(window);
 
-        display(&shader, VAO, EBO);
+        displayGrid(&shader, gridVAO, gridEBO, sizeof(gridIndices));
+        // displayCube(&shader, cubeVAO, cubeEBO, sizeof(cubeIndices));
+        displayCoordSystem(&shader, coordVAO, coordEBO, sizeof(coordIndices));
+        displaySkeleton(&shader, skeletonVAO, skeletonEBO, sizeof(skeletonIndices));
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &VBO);
+    glDeleteVertexArrays(1, &gridVAO);
+    glDeleteBuffers(1, &gridVBO);
+    glDeleteBuffers(1, &gridEBO);
+    glDeleteVertexArrays(1, &cubeVAO);
+    glDeleteBuffers(1, &cubeVBO);
+    glDeleteBuffers(1, &cubeEBO);
+    glDeleteVertexArrays(1, &coordVAO);
+    glDeleteBuffers(1, &coordVBO);
+    glDeleteBuffers(1, &coordEBO);
+    glDeleteVertexArrays(1, &skeletonVAO);
+    glDeleteBuffers(1, &skeletonVBO);
+    glDeleteBuffers(1, &skeletonEBO);
 
     glfwTerminate();
     return 0;
@@ -181,10 +401,11 @@ void processInput(GLFWwindow* window) {
 
 }
 
-void display(Shader* shader, unsigned int VAO, unsigned int EBO) {
+void displayGrid(Shader* shader, unsigned int gridVAO, unsigned int gridEBO, int numVertices) {
 
-    glClearColor(0.0f, 0.0f, 0.2f, 1.0f);
+    glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glLineWidth(3.0f);
 
     shader->use();
 
@@ -194,14 +415,54 @@ void display(Shader* shader, unsigned int VAO, unsigned int EBO) {
     glm::mat4 view = camera.GetViewMatrix();
     shader->setMat4("view", view);
 
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    for(int i = 0; i < 100; i++) {
-        for(int j = 0; j < 100; j++) {
+    glBindVertexArray(gridVAO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gridEBO);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    for(int i = 0; i < 50; i++) {
+        for(int j = 0; j < 50; j++) {
             glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(0.25 * i, 0.0f, 0.25f * j));
+            model = glm::translate(model, glm::vec3(-0.25 * i, 0.0f, -0.25f * j));
             shader->setMat4("model", model);
-            glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, nullptr);
+            glDrawElements(GL_LINE_LOOP, numVertices, GL_UNSIGNED_INT, nullptr);
         }
     }
+}
+
+void displayCube(Shader* shader, unsigned int cubeVAO, unsigned int cubeEBO, int numVertices) {
+
+    glLineWidth(4.0f);
+
+    glBindVertexArray(cubeVAO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeEBO);
+
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+    glDrawElements(GL_TRIANGLES, numVertices, GL_UNSIGNED_INT, nullptr);
+
+}
+
+void displaySkeleton(Shader* shader, unsigned int skeletonVAO, unsigned int skeletonEBO, int numVertices) {
+
+    glLineWidth(7.0f);
+
+    glBindVertexArray(skeletonVAO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, skeletonEBO);
+
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+    glDrawElements(GL_LINES, numVertices, GL_UNSIGNED_INT, nullptr);
+    
+}
+
+void displayCoordSystem(Shader* shader, unsigned int coordVAO, unsigned int coordEBO, int numVertices) {
+
+    glLineWidth(5.0f);
+
+    glBindVertexArray(coordVAO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordEBO);
+
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+    glDrawElements(GL_LINES, numVertices, GL_UNSIGNED_INT, nullptr);
+
 }
