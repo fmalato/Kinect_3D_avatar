@@ -1,4 +1,10 @@
+#include <vector>
+#include <algorithm>
+#include <iostream>
+
 #include <GLFW/glfw3.h>
+#include <fstream>
+#include <sstream>
 
 void drawGrid() {
 
@@ -21,5 +27,36 @@ void drawGrid() {
         glVertex3f(10,0,i);
     };
     glEnd();
+
+}
+
+std::vector<std::vector<double>> getJointPositions(std::string fileName) {
+
+    std::fstream fin;
+    fin.open(fileName, std::ios::in);
+    std::vector<std::string> row;
+    std::string line, word, temp;
+    std::vector<std::vector<double>> positions;
+
+    while(fin >> temp) {
+
+        row.clear();
+        getline(fin, line);
+        std::stringstream s(line);
+        while(getline(s, word, ' ')) {
+
+            row.push_back(word);
+
+        }
+
+        for(int i = 0; i < row.size() / 3; i += 3) {
+
+            positions.push_back({std::stod(row[i]), std::stod(row[i + 1]), std::stod(row[i + 2])});
+
+        }
+
+    }
+
+    return positions;
 
 }

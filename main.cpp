@@ -12,14 +12,15 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
-
-#include <Kinect.h>
+#include <future>
+#include <list>
+#include <ctime>
 
 #include "stb_image.h"
 
 #include "Shader.h"
 #include "Camera.h"
-#include "utils.h"
+#include "Position.h"
 
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
@@ -31,11 +32,9 @@ void drawGrid(Shader* shader, unsigned int gridVAO, unsigned int gridEBO, int nu
 void drawCube(Shader* shader, unsigned int cubeVAO, unsigned int cubeEBO, int numVertices);
 void drawCoordSystem(Shader* shader, unsigned int coordVAO, unsigned int coordEBO, int numVertices);
 void drawSkeleton(Shader* shader, unsigned int skeletonVAO, unsigned int skeletonEBO, int numVertices);
-void drawKinectData();
 
-// Kinect functions
-bool initKinect();
-void getBodyData(IMultiSourceFrame* frame);
+// data management functions
+std::vector<Position*> getJointPositions(std::string fileName);
 
 // Window settings
 const unsigned int WIN_WIDTH = 1920;
@@ -52,14 +51,9 @@ float fov = 45.0f;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-// Kinect handling
-bool tracked;
-Joint joints[JointType_Count];
-IKinectSensor* kinect;             // Kinect sensor
-IMultiSourceFrameReader* reader;   // Kinect data source
-ICoordinateMapper* mapper;         // Converts between depth, color, and 3d coordinates
-
 int main() {
+
+    std::vector<Position*> positions = getJointPositions("../KinectJoints.csv");
 
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -88,13 +82,12 @@ int main() {
     glEnable(GL_DEPTH_TEST);
 
     Shader shader("../Shaders/vertexShader.vert", "../Shaders/fragmentShader.frag");
+    Shader skeletonShader("../Shaders/skeletonVertShader.vert", "../Shaders/skeletonFragShader.frag");
     float currentFrame;
-
-    initKinect();
 
     float gridVertices[] = {
 
-            // position             // color
+            // position          // color
             0.0f, 0.0f, 0.0f,    1.0f, 1.0f, 1.0f,
             0.25f, 0.0f, 0.0f,    1.0f, 1.0f, 1.0f,
             0.25f, 0.0f, 0.25f,    1.0f, 1.0f, 1.0f,
@@ -174,47 +167,82 @@ int main() {
             5, 10,
             5, 11
 
-
     };
 
+    // TODO: change with the positions var and make it change every 1/numFps seconds.
+    /*float skeletonVertices[] = {
+
+        4.5f, 0.0f, 4.75f,    1.0f, 0.0f, 1.0f,
+        4.5f, 0.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // RIGHT FOOT
+
+        5.5f, 0.0f, 4.75f,    1.0f, 0.0f, 1.0f,
+        5.5f, 0.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // LEFT FOOT
+
+        4.5f, 2.0f, 4.2f,    1.0f, 0.0f, 1.0f,    // RIGHT KNEE
+        5.5f, 2.0f, 4.2f,    1.0f, 0.0f, 1.0f,    // LEFT KNEE
+
+        4.5f, 4.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // RIGHT HIP
+        5.5f, 4.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // LEFT HIP
+
+        5.0f, 5.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // PELVIS
+
+        5.0f, 7.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // NECK
+
+        5.0f, 8.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // TOP HEAD
+
+        4.0f, 7.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // RIGHT SHOULDER
+        6.0f, 7.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // LEFT SHOULDER
+
+        3.5f, 5.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // RIGHT ELBOW
+        6.5f, 5.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // LEFT ELBOW
+
+        3.5f, 3.0f, 4.2f,    1.0f, 0.0f, 1.0f,    // RIGHT WRIST
+        6.5f, 3.0f, 4.2f,    1.0f, 0.0f, 1.0f,    // LEFT WRIST
+
+        3.6f, 2.75f, 4.27f,    1.0f, 0.0f, 1.0f,    // RIGHT THUMB
+        6.4f, 2.75f, 4.27f,    1.0f, 0.0f, 1.0f,    // LEFT THUMB
+
+        3.375f, 2.5f, 4.27f,    1.0f, 0.0f, 1.0f,    // RIGHT THUMB
+        6.625f, 2.5f, 4.27f,    1.0f, 0.0f, 1.0f,    // LEFT THUMB
+
+    };*/
+
+    int skeletonFrame = 0;
+
+    std::vector<Joint*> joints = positions[skeletonFrame]->getJoints();
+
+    // This kind of offsets were the fastest way to get a constant translation in the middle of the grid
     float skeletonVertices[] = {
 
-        1.5f, 0.0f, 1.75f,    1.0f, 0.0f, 1.0f,
-        1.5f, 0.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // RIGHT FOOT
-
-        2.5f, 0.0f, 1.75f,    1.0f, 0.0f, 1.0f,
-        2.5f, 0.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // LEFT FOOT
-
-        1.5f, 2.0f, 1.2f,    1.0f, 0.0f, 1.0f,    // RIGHT KNEE
-        2.5f, 2.0f, 1.2f,    1.0f, 0.0f, 1.0f,    // LEFT KNEE
-
-        1.5f, 4.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // RIGHT HIP
-        2.5f, 4.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // LEFT HIP
-
-        2.0f, 5.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // PELVIS
-
-        2.0f, 7.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // NECK
-
-        2.0f, 8.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // TOP HEAD
-
-        1.0f, 7.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // RIGHT SHOULDER
-        3.0f, 7.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // LEFT SHOULDER
-
-        0.5f, 5.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // RIGHT ELBOW
-        3.5f, 5.0f, 1.0f,    1.0f, 0.0f, 1.0f,    // LEFT ELBOW
-
-        0.5f, 3.0f, 1.2f,    1.0f, 0.0f, 1.0f,    // RIGHT WRIST
-        3.5f, 3.0f, 1.2f,    1.0f, 0.0f, 1.0f,    // LEFT WRIST
-
-        0.6f, 2.75f, 1.27f,    1.0f, 0.0f, 1.0f,    // RIGHT THUMB
-        3.4f, 2.75f, 1.27f,    1.0f, 0.0f, 1.0f,    // LEFT THUMB
-
-        0.375f, 2.5f, 1.27f,    1.0f, 0.0f, 1.0f,    // RIGHT THUMB
-        3.625f, 2.5f, 1.27f,    1.0f, 0.0f, 1.0f,    // LEFT THUMB
+            joints[0]->getX() + 6, joints[0]->getY() + (float)2.5, joints[0]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[1]->getX() + 6, joints[1]->getY() + (float)2.5, joints[1]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[2]->getX() + 6, joints[2]->getY() + (float)2.5, joints[2]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[3]->getX() + 6, joints[3]->getY() + (float)2.5, joints[3]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[4]->getX() + 6, joints[4]->getY() + (float)2.5, joints[4]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[5]->getX() + 6, joints[5]->getY() + (float)2.5, joints[5]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[6]->getX() + 6, joints[6]->getY() + (float)2.5, joints[6]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[7]->getX() + 6, joints[7]->getY() + (float)2.5, joints[7]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[8]->getX() + 6, joints[8]->getY() + (float)2.5, joints[8]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[9]->getX() + 6, joints[9]->getY() + (float)2.5, joints[9]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[10]->getX() + 6, joints[10]->getY() + (float)2.5, joints[10]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[11]->getX() + 6, joints[11]->getY() + (float)2.5, joints[11]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[12]->getX() + 6, joints[12]->getY() + (float)2.5, joints[12]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[13]->getX() + 6, joints[13]->getY() + (float)2.5, joints[13]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[14]->getX() + 6, joints[14]->getY() + (float)2.5, joints[14]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[15]->getX() + 6, joints[15]->getY() + (float)2.5, joints[15]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[16]->getX() + 6, joints[16]->getY() + (float)2.5, joints[16]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[17]->getX() + 6, joints[17]->getY() + (float)2.5, joints[17]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[18]->getX() + 6, joints[18]->getY() + (float)2.5, joints[18]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[19]->getX() + 6, joints[19]->getY() + (float)2.5, joints[19]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[20]->getX() + 6, joints[20]->getY() + (float)2.5, joints[20]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[21]->getX() + 6, joints[21]->getY() + (float)2.5, joints[21]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[22]->getX() + 6, joints[22]->getY() + (float)2.5, joints[22]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[23]->getX() + 6, joints[23]->getY() + (float)2.5, joints[23]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[24]->getX() + 6, joints[24]->getY() + (float)2.5, joints[24]->getZ() + 2,    1.0f, 0.0f, 1.0f,
 
     };
 
-    unsigned int skeletonIndices[] = {
+    /*unsigned int skeletonIndices[] = {
 
             0, 1,
             2, 3,
@@ -239,9 +267,44 @@ int main() {
             17, 19,
             18, 20
 
+    };*/
+
+    unsigned int skeletonIndices[] = {
+
+            3, 2,       // HEAD - NECK
+            2, 20,       // NECK - SPINE
+
+            20, 4,       // SPINE - SHOULDER_LEFT
+            4, 5,       // SHOULDER_LEFT - ELBOW__LEFT
+            5, 6,       // ELBOW_LEFT - WRIST_LEFT
+            6, 22,       // WRIST_LEFT - THUMB_LEFT
+            6, 7,      // WRIST_LEFT - HAND_LEFT
+            7, 21,     // HAND_LEFT - HANF_TIP_LEFT
+
+            20, 8,       // SPINE - SHOULDER_RIGHT
+            8, 9,       // SHOULDER_RIGHT - ELBOW_RIGHT
+            9, 10,       // ELBOW_RIGHT - WRIST_RIGHT
+            10, 24,      // WRIST_RIGHT - THUMB_RIGHT
+            10, 11,      // WRIST_RIGHT - HAND_RIGHT
+            11, 23,     // HAND_RIGHT - HAND_TIP_RIGHT
+
+            20, 1,      // SPINE - SPINE_MID
+            1, 0,     // SPINE_MID - SPINE_BASE
+
+            0, 12,     // SPINE_BASE - HIP_LEFT
+            12, 13,     // HIP_LEFT - KNEE_LEFT
+            13, 14,     // KNEE_LEFT - ANKLE_LEFT
+            14, 15,     // ANKLE_LEFT - FOOT_LEFT
+
+            0, 16,     // SPINE_BASE - HIP_RIGHT
+            16, 17,     // HIP_RIGHT - KNEE_RIGHT
+            17, 18,     // KNEE_RIGHT - ANKLE_RIGHT
+            18, 19,     // ANKLE_RIGHT - FOOT_RIGHT
+
     };
 
     // --------------------- GRID ------------------------------
+
     unsigned int gridVAO, gridVBO, gridEBO;
     glGenVertexArrays(1, &gridVAO);
     glBindVertexArray(gridVAO);
@@ -333,9 +396,15 @@ int main() {
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
+    // Animation...?
     shader.use();
 
+    std::clock_t start;
+    double duration = 0;
+
     while(!glfwWindowShouldClose(window)) {
+
+        // Animation...?
 
         currentFrame = (float)glfwGetTime();
         deltaTime = currentFrame - lastFrame;
@@ -485,76 +554,47 @@ void drawCoordSystem(Shader* shader, unsigned int coordVAO, unsigned int coordEB
 
 }
 
-void drawKinectData() {
-    // ...
-    if (tracked) {
-        // Draw some arms
-        const CameraSpacePoint& lh = joints[JointType_WristLeft].Position;
-        const CameraSpacePoint& le = joints[JointType_ElbowLeft].Position;;
-        const CameraSpacePoint& ls = joints[JointType_ShoulderLeft].Position;;
-        const CameraSpacePoint& rh = joints[JointType_WristRight].Position;;
-        const CameraSpacePoint& re = joints[JointType_ElbowRight].Position;;
-        const CameraSpacePoint& rs = joints[JointType_ShoulderRight].Position;;
-        glBegin(GL_LINES);
-        glColor3f(1.f, 0.f, 0.f);
-        // lower left arm
-        glVertex3f(lh.X, lh.Y, lh.Z);
-        glVertex3f(le.X, le.Y, le.Z);
-        // upper left arm
-        glVertex3f(le.X, le.Y, le.Z);
-        glVertex3f(ls.X, ls.Y, ls.Z);
-        // lower right arm
-        glVertex3f(rh.X, rh.Y, rh.Z);
-        glVertex3f(re.X, re.Y, re.Z);
-        // upper right arm
-        glVertex3f(re.X, re.Y, re.Z);
-        glVertex3f(rs.X, rs.Y, rs.Z);
-        glEnd();
-    }
-}
+std::vector<Position*> getJointPositions(std::string fileName) {
 
-bool initKinect() {
+    std::fstream fin;
+    fin.open(fileName, std::ios::in);
+    std::vector<std::string> row;
+    std::string line, word, temp;
+    std::vector<Position*> positions;
+    int numRow = 0;
 
-    if(!GetDefaultKinectSensor(&kinect)) {
-        std::cout << "Failed to get Kinect sensor." << std::endl;
-        return false;
-    }
-    if(kinect) {
-        kinect->get_CoordinateMapper(&mapper);
-        kinect->Open();
-        kinect->OpenMultiSourceFrameReader(FrameSourceTypes::FrameSourceTypes_Color |
-                                           FrameSourceTypes::FrameSourceTypes_Depth |
-                                           FrameSourceTypes::FrameSourceTypes_Body, &reader);
-        std::cout << "Kinect sensor initialized." << std::endl;
-        return reader;
-    }
-    else {
-        std::cout << "Couldn't open Kinect sensor." << std::endl;
-        return false;
-    }
+    while(fin >> temp) {
 
-}
+        // Useful data are at row 1, other data that may be useful are in the next two rows
+        if( numRow == 1 ) {
+            row.clear();
+            line = temp;
+            std::stringstream s(line);
+            while(std::getline(s, word, ',')) {
+                row.push_back(word);
+            }
 
-void getBodyData(IMultiSourceFrame* frame) {
+            if (!s && word.empty())
+            {
+                row.push_back("");
+            }
 
-    IBodyFrame* bodyframe;
-    IBodyFrameReference* frameref = nullptr;
-    frame->get_BodyFrameReference(&frameref);
-    frameref->AcquireFrame(&bodyframe);
-    if (frameref) frameref->Release();
+            for(int i = 0; i < row.size(); i += 75) {
+                auto* position = new Position();
+                for(int j = 0; j < 75; j += 3) {
+                    // Doubling to make the skeleton bigger and hence more visible
+                    position->add(new Joint(2 * std::stof(row[i + j]),
+                                            2 * std::stof(row[i + j + 1]),
+                                            2 * std::stof(row[i + j + 2])));
+                }
+                positions.push_back(position);
+            }
 
-    if (!bodyframe) return;
-
-    IBody* body[BODY_COUNT];
-    bodyframe->GetAndRefreshBodyData(BODY_COUNT, body);
-    for (int i = 0; i < BODY_COUNT; i++) {
-        body[i]->get_IsTracked(&tracked);
-        if (tracked) {
-            body[i]->GetJoints(JointType_Count, joints);
-            break;
         }
+        numRow++;
+
     }
 
-    if (bodyframe) bodyframe->Release();
+    return positions;
 
 }
