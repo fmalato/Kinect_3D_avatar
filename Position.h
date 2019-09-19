@@ -23,7 +23,7 @@ public:
 
     }
 
-    Position(std::vector<Joint*> joints) {
+    explicit Position(std::vector<Joint*> joints) {
 
         for(auto itr = joints.begin(); itr != joints.end(); itr++) {
             this->joints.push_back(*itr);

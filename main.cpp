@@ -15,6 +15,7 @@
 #include <future>
 #include <list>
 #include <ctime>
+#include <iterator>
 
 #include "stb_image.h"
 
@@ -32,6 +33,7 @@ void drawGrid(Shader* shader, unsigned int gridVAO, unsigned int gridEBO, int nu
 void drawCube(Shader* shader, unsigned int cubeVAO, unsigned int cubeEBO, int numVertices);
 void drawCoordSystem(Shader* shader, unsigned int coordVAO, unsigned int coordEBO, int numVertices);
 void drawSkeleton(Shader* shader, unsigned int skeletonVAO, unsigned int skeletonEBO, int numVertices);
+void drawCubeContours(Shader* shader, unsigned int cubeVAO, unsigned int cubeEBO, int numVertices);
 
 // data management functions
 std::vector<Position*> getJointPositions(std::string fileName);
@@ -84,6 +86,7 @@ int main() {
 
     Shader shader("../Shaders/vertexShader.vert", "../Shaders/fragmentShader.frag");
     Shader skeletonShader("../Shaders/skeletonVertShader.vert", "../Shaders/skeletonFragShader.frag");
+    // Shader cubeWithContoursShader("../Shaders/cubeContoursVertShader.vert", "../Shaders/cubeContoursFragShader.frag");
     float currentFrame;
 
     float gridVertices[] = {
@@ -171,16 +174,21 @@ int main() {
     };
 
     // Smoothing the animation
-    int times = 2;
+    /*int times = 2;
     int currentPos = 0;
-    for(auto posItr = positions.begin(); posItr < positions.end() - 1; posItr++) {
+    for(int i = 0; i < positions.size() - 1; i++) {
         std::cout << "interpolating between positions " << currentPos << " and " << currentPos + 1 << std::endl;
-        std::vector<Position*> interPositions = interpolate(*posItr, *(posItr++), times);
+        std::vector<Position*> interPositions = interpolate(positions[i], positions[i + 1], times);
         for(auto itr2 = interPositions.begin(); itr2 != interPositions.end(); itr2++) {
-            posItr = positions.insert(posItr, *itr2);
+            auto temp = positions[i];
+            positions.push_back((positions[positions.size() - 1]));
+            for(int j = positions.size() - 2; j >= i; j--) {
+                positions[j + 1] = positions[j];
+            }
+            positions[i + 1] = temp;
         }
         currentPos++;
-    }
+    }*/
 
     int skeletonFrame = 0;
     std::vector<Joint*> joints = positions[skeletonFrame]->getJoints();
@@ -380,7 +388,6 @@ int main() {
                 joints[24]->getX() + 6, joints[24]->getY() + (float)2.5, joints[24]->getZ() + 2,    1.0f, 0.0f, 1.0f,
 
         };
-        glBufferData(GL_ARRAY_BUFFER, sizeof(skeletonVertices2), skeletonVertices2, GL_STATIC_DRAW);
 
         currentFrame = (float)glfwGetTime();
         deltaTime = currentFrame - lastFrame;
@@ -390,8 +397,10 @@ int main() {
 
         drawGrid(&shader, gridVAO, gridEBO, sizeof(gridIndices));
         // drawCube(&shader, cubeVAO, cubeEBO, sizeof(cubeIndices));
+        // drawCubeContours(&cubeWithContoursShader, cubeVAO, cubeEBO, sizeof(cubeIndices));
         drawCoordSystem(&shader, coordVAO, coordEBO, sizeof(coordIndices));
-        drawSkeleton(&shader, skeletonVAO, skeletonEBO, sizeof(skeletonIndices));
+        glBufferData(GL_ARRAY_BUFFER, sizeof(skeletonVertices2), skeletonVertices2, GL_STATIC_DRAW);
+        drawSkeleton(&skeletonShader, skeletonVAO, skeletonEBO, sizeof(skeletonIndices));
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -504,6 +513,19 @@ void drawCube(Shader* shader, unsigned int cubeVAO, unsigned int cubeEBO, int nu
     glBindVertexArray(cubeVAO);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeEBO);
 
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+    glDrawElements(GL_TRIANGLES, numVertices, GL_UNSIGNED_INT, nullptr);
+
+}
+
+void drawCubeContours(Shader* shader, unsigned int cubeVAO, unsigned int cubeEBO, int numVertices) {
+
+    glLineWidth(4.0f);
+
+    glBindVertexArray(cubeVAO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeEBO);
+
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     glDrawElements(GL_TRIANGLES, numVertices, GL_UNSIGNED_INT, nullptr);
@@ -519,9 +541,9 @@ void drawSkeleton(Shader* shader, unsigned int skeletonVAO, unsigned int skeleto
 
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-    /*glm::mat4 model = glm::mat4(1.0f);
-    model = glm::translate(model, glm::vec3(-0.25 * i, 0.0f, -0.25f * j));
-    shader->setMat4("modelSkeleton", model);*/
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3(-12.5f, 0.0f, -12.5f));
+    shader->setMat4("modelSkeleton", model);
 
     glDrawElements(GL_LINES, numVertices, GL_UNSIGNED_INT, nullptr);
     
@@ -596,20 +618,28 @@ std::vector<Position*> interpolate(Position* start, Position* end, int times) {
     for(int i = 0; i < 25; i++) {
         // loop on the number of interpolations
         for (int j = 1; j < times; j++) {
-            interPos.push_back(new Joint((endJoints[i]->getX() + startJoints[i]->getX()) * j / times,
-                                       (endJoints[i]->getY() + startJoints[i]->getY()) * j / times,
-                                       (endJoints[i]->getZ() + startJoints[i]->getZ()) * j / times));
+            interPos.push_back(new Joint(startJoints[i]->getX() + (endJoints[i]->getX() - startJoints[i]->getX()) * j / times,
+                                         startJoints[i]->getY() + (endJoints[i]->getY() - startJoints[i]->getY()) * j / times,
+                                         startJoints[i]->getZ() + (endJoints[i]->getZ() - startJoints[i]->getZ()) * j / times));
         }
     }
+    int iteration = 0;
+    int cycle = 0;
     std::vector<Joint*> currentPosJoints;
     for(int k = 0; k < times - 1; k++) {
-        for (auto itr = interPos.begin() + k; itr != interPos.end(); itr++) {
-            for(int l = 0; l < times - 2; l++) {
+        for (auto itr = interPos.begin() + k; itr < interPos.end(); itr++) {
+            std::cout << "iteration: " << iteration << std::endl;
+            for(int l = 0; l < times - 1; l++) {
                 itr++;
+                std::cout << "cycle: " << cycle << std::endl;
+                cycle++;
             }
             currentPosJoints.push_back(*itr);
+            iteration++;
+            cycle = 0;
         }
         result.push_back(new Position(currentPosJoints));
+        iteration = 0;
     }
 
     return result;
