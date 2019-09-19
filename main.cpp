@@ -35,6 +35,7 @@ void drawSkeleton(Shader* shader, unsigned int skeletonVAO, unsigned int skeleto
 
 // data management functions
 std::vector<Position*> getJointPositions(std::string fileName);
+std::vector<Position*> interpolate(Position* start, Position* end, int times);
 
 // Window settings
 const unsigned int WIN_WIDTH = 1920;
@@ -169,46 +170,19 @@ int main() {
 
     };
 
-    // TODO: change with the positions var and make it change every 1/numFps seconds.
-    /*float skeletonVertices[] = {
-
-        4.5f, 0.0f, 4.75f,    1.0f, 0.0f, 1.0f,
-        4.5f, 0.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // RIGHT FOOT
-
-        5.5f, 0.0f, 4.75f,    1.0f, 0.0f, 1.0f,
-        5.5f, 0.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // LEFT FOOT
-
-        4.5f, 2.0f, 4.2f,    1.0f, 0.0f, 1.0f,    // RIGHT KNEE
-        5.5f, 2.0f, 4.2f,    1.0f, 0.0f, 1.0f,    // LEFT KNEE
-
-        4.5f, 4.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // RIGHT HIP
-        5.5f, 4.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // LEFT HIP
-
-        5.0f, 5.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // PELVIS
-
-        5.0f, 7.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // NECK
-
-        5.0f, 8.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // TOP HEAD
-
-        4.0f, 7.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // RIGHT SHOULDER
-        6.0f, 7.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // LEFT SHOULDER
-
-        3.5f, 5.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // RIGHT ELBOW
-        6.5f, 5.0f, 4.0f,    1.0f, 0.0f, 1.0f,    // LEFT ELBOW
-
-        3.5f, 3.0f, 4.2f,    1.0f, 0.0f, 1.0f,    // RIGHT WRIST
-        6.5f, 3.0f, 4.2f,    1.0f, 0.0f, 1.0f,    // LEFT WRIST
-
-        3.6f, 2.75f, 4.27f,    1.0f, 0.0f, 1.0f,    // RIGHT THUMB
-        6.4f, 2.75f, 4.27f,    1.0f, 0.0f, 1.0f,    // LEFT THUMB
-
-        3.375f, 2.5f, 4.27f,    1.0f, 0.0f, 1.0f,    // RIGHT THUMB
-        6.625f, 2.5f, 4.27f,    1.0f, 0.0f, 1.0f,    // LEFT THUMB
-
-    };*/
+    // Smoothing the animation
+    int times = 2;
+    int currentPos = 0;
+    for(auto posItr = positions.begin(); posItr < positions.end() - 1; posItr++) {
+        std::cout << "interpolating between positions " << currentPos << " and " << currentPos + 1 << std::endl;
+        std::vector<Position*> interPositions = interpolate(*posItr, *(posItr++), times);
+        for(auto itr2 = interPositions.begin(); itr2 != interPositions.end(); itr2++) {
+            posItr = positions.insert(posItr, *itr2);
+        }
+        currentPos++;
+    }
 
     int skeletonFrame = 0;
-
     std::vector<Joint*> joints = positions[skeletonFrame]->getJoints();
 
     // This kind of offsets were the fastest way to get a constant translation in the middle of the grid
@@ -242,64 +216,37 @@ int main() {
 
     };
 
-    /*unsigned int skeletonIndices[] = {
-
-            0, 1,
-            2, 3,
-            1, 4,
-            3, 5,
-            4, 6,
-            5, 7,
-            6, 8,
-            7, 8,
-            8, 9,
-            9, 10,
-            9, 11,
-            9, 12,
-            11, 13,
-            13, 15,
-            15, 17,
-            15, 19,
-            12, 14,
-            14, 16,
-            16, 18,
-            16, 20,
-            17, 19,
-            18, 20
-
-    };*/
-
     unsigned int skeletonIndices[] = {
 
-            3, 2,       // HEAD - NECK
+            3, 2,        // HEAD - NECK
             2, 20,       // NECK - SPINE
 
             20, 4,       // SPINE - SHOULDER_LEFT
-            4, 5,       // SHOULDER_LEFT - ELBOW__LEFT
-            5, 6,       // ELBOW_LEFT - WRIST_LEFT
+            4, 5,        // SHOULDER_LEFT - ELBOW__LEFT
+            5, 6,        // ELBOW_LEFT - WRIST_LEFT
             6, 22,       // WRIST_LEFT - THUMB_LEFT
-            6, 7,      // WRIST_LEFT - HAND_LEFT
-            7, 21,     // HAND_LEFT - HANF_TIP_LEFT
+            6, 7,        // WRIST_LEFT - HAND_LEFT
+            7, 21,       // HAND_LEFT - HANF_TIP_LEFT
 
             20, 8,       // SPINE - SHOULDER_RIGHT
-            8, 9,       // SHOULDER_RIGHT - ELBOW_RIGHT
+            8, 9,        // SHOULDER_RIGHT - ELBOW_RIGHT
             9, 10,       // ELBOW_RIGHT - WRIST_RIGHT
             10, 24,      // WRIST_RIGHT - THUMB_RIGHT
             10, 11,      // WRIST_RIGHT - HAND_RIGHT
-            11, 23,     // HAND_RIGHT - HAND_TIP_RIGHT
+            11, 23,      // HAND_RIGHT - HAND_TIP_RIGHT
 
-            20, 1,      // SPINE - SPINE_MID
-            1, 0,     // SPINE_MID - SPINE_BASE
+            20, 1,       // SPINE - SPINE_MID
+            1, 0,        // SPINE_MID - SPINE_BASE
 
-            0, 12,     // SPINE_BASE - HIP_LEFT
-            12, 13,     // HIP_LEFT - KNEE_LEFT
-            13, 14,     // KNEE_LEFT - ANKLE_LEFT
-            14, 15,     // ANKLE_LEFT - FOOT_LEFT
+            0, 12,       // SPINE_BASE - HIP_LEFT
+            12, 13,      // HIP_LEFT - KNEE_LEFT
+            13, 14,      // KNEE_LEFT - ANKLE_LEFT
+            14, 15,      // ANKLE_LEFT - FOOT_LEFT
 
-            0, 16,     // SPINE_BASE - HIP_RIGHT
-            16, 17,     // HIP_RIGHT - KNEE_RIGHT
-            17, 18,     // KNEE_RIGHT - ANKLE_RIGHT
-            18, 19,     // ANKLE_RIGHT - FOOT_RIGHT
+            0, 16,       // SPINE_BASE - HIP_RIGHT
+            16, 17,      // HIP_RIGHT - KNEE_RIGHT
+            17, 18,      // KNEE_RIGHT - ANKLE_RIGHT
+            18, 19,      // ANKLE_RIGHT - FOOT_RIGHT
 
     };
 
@@ -396,15 +343,44 @@ int main() {
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    // Animation...?
     shader.use();
 
-    std::clock_t start;
-    double duration = 0;
+    float duration = 0;
 
     while(!glfwWindowShouldClose(window)) {
 
         // Animation...?
+        joints = positions[skeletonFrame % positions.size()]->getJoints();
+        float skeletonVertices2[] = {
+
+                joints[0]->getX() + 6, joints[0]->getY() + (float)2.5, joints[0]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[1]->getX() + 6, joints[1]->getY() + (float)2.5, joints[1]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[2]->getX() + 6, joints[2]->getY() + (float)2.5, joints[2]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[3]->getX() + 6, joints[3]->getY() + (float)2.5, joints[3]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[4]->getX() + 6, joints[4]->getY() + (float)2.5, joints[4]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[5]->getX() + 6, joints[5]->getY() + (float)2.5, joints[5]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[6]->getX() + 6, joints[6]->getY() + (float)2.5, joints[6]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[7]->getX() + 6, joints[7]->getY() + (float)2.5, joints[7]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[8]->getX() + 6, joints[8]->getY() + (float)2.5, joints[8]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[9]->getX() + 6, joints[9]->getY() + (float)2.5, joints[9]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[10]->getX() + 6, joints[10]->getY() + (float)2.5, joints[10]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[11]->getX() + 6, joints[11]->getY() + (float)2.5, joints[11]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[12]->getX() + 6, joints[12]->getY() + (float)2.5, joints[12]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[13]->getX() + 6, joints[13]->getY() + (float)2.5, joints[13]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[14]->getX() + 6, joints[14]->getY() + (float)2.5, joints[14]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[15]->getX() + 6, joints[15]->getY() + (float)2.5, joints[15]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[16]->getX() + 6, joints[16]->getY() + (float)2.5, joints[16]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[17]->getX() + 6, joints[17]->getY() + (float)2.5, joints[17]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[18]->getX() + 6, joints[18]->getY() + (float)2.5, joints[18]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[19]->getX() + 6, joints[19]->getY() + (float)2.5, joints[19]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[20]->getX() + 6, joints[20]->getY() + (float)2.5, joints[20]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[21]->getX() + 6, joints[21]->getY() + (float)2.5, joints[21]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[22]->getX() + 6, joints[22]->getY() + (float)2.5, joints[22]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[23]->getX() + 6, joints[23]->getY() + (float)2.5, joints[23]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+                joints[24]->getX() + 6, joints[24]->getY() + (float)2.5, joints[24]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+
+        };
+        glBufferData(GL_ARRAY_BUFFER, sizeof(skeletonVertices2), skeletonVertices2, GL_STATIC_DRAW);
 
         currentFrame = (float)glfwGetTime();
         deltaTime = currentFrame - lastFrame;
@@ -419,6 +395,12 @@ int main() {
 
         glfwSwapBuffers(window);
         glfwPollEvents();
+
+        duration += 1 / (float)8;
+        if(duration > 1) {
+            duration = 0;
+            skeletonFrame++;
+        }
     }
 
     glDeleteVertexArrays(1, &gridVAO);
@@ -537,6 +519,10 @@ void drawSkeleton(Shader* shader, unsigned int skeletonVAO, unsigned int skeleto
 
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
+    /*glm::mat4 model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3(-0.25 * i, 0.0f, -0.25f * j));
+    shader->setMat4("modelSkeleton", model);*/
+
     glDrawElements(GL_LINES, numVertices, GL_UNSIGNED_INT, nullptr);
     
 }
@@ -597,4 +583,34 @@ std::vector<Position*> getJointPositions(std::string fileName) {
 
     return positions;
 
+}
+
+std::vector<Position*> interpolate(Position* start, Position* end, int times) {
+
+    std::vector<Joint*> interPos;
+    std::vector<Position*> result;
+    std::vector<Joint*> startJoints = start->getJoints();
+    std::vector<Joint*> endJoints = end->getJoints();
+
+    // loop on the joints
+    for(int i = 0; i < 25; i++) {
+        // loop on the number of interpolations
+        for (int j = 1; j < times; j++) {
+            interPos.push_back(new Joint((endJoints[i]->getX() + startJoints[i]->getX()) * j / times,
+                                       (endJoints[i]->getY() + startJoints[i]->getY()) * j / times,
+                                       (endJoints[i]->getZ() + startJoints[i]->getZ()) * j / times));
+        }
+    }
+    std::vector<Joint*> currentPosJoints;
+    for(int k = 0; k < times - 1; k++) {
+        for (auto itr = interPos.begin() + k; itr != interPos.end(); itr++) {
+            for(int l = 0; l < times - 2; l++) {
+                itr++;
+            }
+            currentPosJoints.push_back(*itr);
+        }
+        result.push_back(new Position(currentPosJoints));
+    }
+
+    return result;
 }

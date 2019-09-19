@@ -5,6 +5,7 @@
 #ifndef INC_3D_AVATAR_JOINT_H
 #define INC_3D_AVATAR_JOINT_H
 
+#include <vector>
 
 class Joint {
 
