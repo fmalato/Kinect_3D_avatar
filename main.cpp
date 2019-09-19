@@ -16,6 +16,7 @@
 #include <list>
 #include <ctime>
 #include <iterator>
+#include <unistd.h>
 
 #include "stb_image.h"
 
@@ -37,6 +38,7 @@ void drawCubeContours(Shader* shader, unsigned int cubeVAO, unsigned int cubeEBO
 
 // data management functions
 std::vector<Position*> getJointPositions(std::string fileName);
+std::vector<Position*> getJointPositionsRealtime(std::string fileName);
 std::vector<Position*> interpolate(Position* start, Position* end, int times);
 
 // Window settings
@@ -174,24 +176,24 @@ int main() {
     };
 
     // Smoothing the animation
-    /*int times = 2;
+    int times = 8;
     int currentPos = 0;
+    std::vector<Position*>allInterPos;
     for(int i = 0; i < positions.size() - 1; i++) {
         std::cout << "interpolating between positions " << currentPos << " and " << currentPos + 1 << std::endl;
         std::vector<Position*> interPositions = interpolate(positions[i], positions[i + 1], times);
-        for(auto itr2 = interPositions.begin(); itr2 != interPositions.end(); itr2++) {
-            auto temp = positions[i];
-            positions.push_back((positions[positions.size() - 1]));
-            for(int j = positions.size() - 2; j >= i; j--) {
-                positions[j + 1] = positions[j];
-            }
-            positions[i + 1] = temp;
+        for(auto itr = interPositions.begin(); itr != interPositions.end(); itr++) {
+            allInterPos.push_back(*itr);
         }
         currentPos++;
-    }*/
+    }
+
+    std::cout << "Current number of frames: " << allInterPos.size() << std::endl;
 
     int skeletonFrame = 0;
-    std::vector<Joint*> joints = positions[skeletonFrame]->getJoints();
+    // since the allInterPos vector contains >> positions than positions, the animation is more fluid even without
+    // re-assignment
+    std::vector<Joint*> joints = allInterPos[skeletonFrame]->getJoints();
 
     // This kind of offsets were the fastest way to get a constant translation in the middle of the grid
     float skeletonVertices[] = {
@@ -354,11 +356,15 @@ int main() {
     shader.use();
 
     float duration = 0;
+    double timerStart, timerEnd;
+
+    std::ifstream file("KinectJointsRealtime.csv");
 
     while(!glfwWindowShouldClose(window)) {
 
+        /*timerStart = glfwGetTime();
         // Animation...?
-        joints = positions[skeletonFrame % positions.size()]->getJoints();
+        joints = allInterPos[skeletonFrame % allInterPos.size()]->getJoints();
         float skeletonVertices2[] = {
 
                 joints[0]->getX() + 6, joints[0]->getY() + (float)2.5, joints[0]->getZ() + 2,    1.0f, 0.0f, 1.0f,
@@ -387,9 +393,46 @@ int main() {
                 joints[23]->getX() + 6, joints[23]->getY() + (float)2.5, joints[23]->getZ() + 2,    1.0f, 0.0f, 1.0f,
                 joints[24]->getX() + 6, joints[24]->getY() + (float)2.5, joints[24]->getZ() + 2,    1.0f, 0.0f, 1.0f,
 
+        };*/
+
+        // REALTIME ANIMATION! To use it, you will need:
+        // https://it.mathworks.com/matlabcentral/fileexchange/53439-kinect-2-interface-for-matlab
+        // Just copy the videoDemo.m and videoDemoWithWindows.m scripts inside the project's folder and run one of them
+
+        std::vector<Position *> positionsRealtime = getJointPositionsRealtime("../KinectJointsRealtime.csv");
+        joints = positionsRealtime[0]->getJoints();
+
+        float skeletonVertices2[] = {
+
+                joints[0]->getX() + 6, joints[0]->getY() + (float) 2.5, joints[0]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[1]->getX() + 6, joints[1]->getY() + (float) 2.5, joints[1]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[2]->getX() + 6, joints[2]->getY() + (float) 2.5, joints[2]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[3]->getX() + 6, joints[3]->getY() + (float) 2.5, joints[3]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[4]->getX() + 6, joints[4]->getY() + (float) 2.5, joints[4]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[5]->getX() + 6, joints[5]->getY() + (float) 2.5, joints[5]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[6]->getX() + 6, joints[6]->getY() + (float) 2.5, joints[6]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[7]->getX() + 6, joints[7]->getY() + (float) 2.5, joints[7]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[8]->getX() + 6, joints[8]->getY() + (float) 2.5, joints[8]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[9]->getX() + 6, joints[9]->getY() + (float) 2.5, joints[9]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[10]->getX() + 6, joints[10]->getY() + (float) 2.5, joints[10]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[11]->getX() + 6, joints[11]->getY() + (float) 2.5, joints[11]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[12]->getX() + 6, joints[12]->getY() + (float) 2.5, joints[12]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[13]->getX() + 6, joints[13]->getY() + (float) 2.5, joints[13]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[14]->getX() + 6, joints[14]->getY() + (float) 2.5, joints[14]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[15]->getX() + 6, joints[15]->getY() + (float) 2.5, joints[15]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[16]->getX() + 6, joints[16]->getY() + (float) 2.5, joints[16]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[17]->getX() + 6, joints[17]->getY() + (float) 2.5, joints[17]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[18]->getX() + 6, joints[18]->getY() + (float) 2.5, joints[18]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[19]->getX() + 6, joints[19]->getY() + (float) 2.5, joints[19]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[20]->getX() + 6, joints[20]->getY() + (float) 2.5, joints[20]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[21]->getX() + 6, joints[21]->getY() + (float) 2.5, joints[21]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[22]->getX() + 6, joints[22]->getY() + (float) 2.5, joints[22]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[23]->getX() + 6, joints[23]->getY() + (float) 2.5, joints[23]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+                joints[24]->getX() + 6, joints[24]->getY() + (float) 2.5, joints[24]->getZ() + 2, 1.0f, 0.0f, 1.0f,
+
         };
 
-        currentFrame = (float)glfwGetTime();
+        currentFrame = (float) glfwGetTime();
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
@@ -405,9 +448,9 @@ int main() {
         glfwSwapBuffers(window);
         glfwPollEvents();
 
-        duration += 1 / (float)8;
-        if(duration > 1) {
-            duration = 0;
+        timerEnd = glfwGetTime();
+        if(timerEnd - timerStart < 1 / (double)60) {
+            sleep(1 - (timerEnd - timerStart));
             skeletonFrame++;
         }
     }
@@ -607,6 +650,60 @@ std::vector<Position*> getJointPositions(std::string fileName) {
 
 }
 
+std::vector<Position*> getJointPositionsRealtime(std::string fileName) {
+
+    std::fstream fin;
+    fin.open(fileName, std::ios::in);
+    std::vector<std::string> row;
+    std::string line, word, temp;
+    std::vector<Position*> positions;
+    int numRow = 0;
+
+    while(fin >> temp) {
+
+        // Useful data are at row 1, other data that may be useful are in the next two rows
+
+        if( numRow == 1 ) {
+            row.clear();
+            line = temp;
+            std::stringstream s(line);
+            while(std::getline(s, word, ',')) {
+                row.push_back(word);
+            }
+
+            if (!s && word.empty())
+            {
+                row.push_back("");
+            }
+
+            for(int i = 0; i < row.size(); i += 75) {
+                auto* position = new Position();
+                for(int j = 0; j < 75; j += 3) {
+                    // Doubling to make the skeleton bigger and hence more visible
+                    position->add(new Joint(2 * std::stof(row[i + j]),
+                                            2 * std::stof(row[i + j + 1]),
+                                            2 * std::stof(row[i + j + 2])));
+                }
+                positions.push_back(position);
+            }
+
+        }
+        numRow++;
+
+    }
+
+    if(positions.empty()) {
+        std::vector<Joint*> joints;
+        for(int k = 0; k < 75; k++) {
+            joints.push_back(new Joint(3, 3, 3));
+        }
+        positions.push_back(new Position(joints));
+    }
+
+    return positions;
+
+}
+
 std::vector<Position*> interpolate(Position* start, Position* end, int times) {
 
     std::vector<Joint*> interPos;
@@ -623,23 +720,14 @@ std::vector<Position*> interpolate(Position* start, Position* end, int times) {
                                          startJoints[i]->getZ() + (endJoints[i]->getZ() - startJoints[i]->getZ()) * j / times));
         }
     }
-    int iteration = 0;
-    int cycle = 0;
+
     std::vector<Joint*> currentPosJoints;
     for(int k = 0; k < times - 1; k++) {
-        for (auto itr = interPos.begin() + k; itr < interPos.end(); itr++) {
-            std::cout << "iteration: " << iteration << std::endl;
-            for(int l = 0; l < times - 1; l++) {
-                itr++;
-                std::cout << "cycle: " << cycle << std::endl;
-                cycle++;
-            }
+        for (auto itr = std::next(interPos.begin(), k); itr < interPos.end(); itr += times - 1) {
             currentPosJoints.push_back(*itr);
-            iteration++;
-            cycle = 0;
         }
         result.push_back(new Position(currentPosJoints));
-        iteration = 0;
+        currentPosJoints.clear();
     }
 
     return result;
