@@ -39,6 +39,8 @@ public:
 
     void setJoints(const std::vector<Joint *> &joints);
 
+    int getJointsSize();
+
 };
 
 

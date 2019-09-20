@@ -11,3 +11,7 @@ const std::vector<Joint *> &Position::getJoints() const {
 void Position::setJoints(const std::vector<Joint *> &joints) {
     Position::joints = joints;
 }
+
+int Position::getJointsSize() {
+    return this->joints.size();
+}
