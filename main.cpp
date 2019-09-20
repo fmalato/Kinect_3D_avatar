@@ -31,9 +31,9 @@ void scrollCallback(GLFWwindow* window, double offsetX, double offsetY);
 
 // drawing functions
 void drawGrid(Shader* shader, unsigned int gridVAO, unsigned int gridEBO, int numVertices);
-void drawCube(Shader* shader, unsigned int cubeVAO, unsigned int cubeEBO, int numVertices);
+void drawCube(Shader* shader, std::vector<float> center, float sideLength, std::vector<float> colorRGB);
 void drawCoordSystem(Shader* shader, unsigned int coordVAO, unsigned int coordEBO, int numVertices);
-void drawSkeleton(Shader* shader, unsigned int skeletonVAO, unsigned int skeletonEBO, int numVertices);
+void drawSkeleton(Shader* shader, std::vector<Position*> allInterPos, int skeletonFrame);
 void drawCubeContours(Shader* shader, unsigned int cubeVAO, unsigned int cubeEBO, int numVertices);
 
 // data management functions
@@ -55,6 +55,12 @@ float fov = 45.0f;
 // Time handling
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
+
+// a one-position buffer in case the MatLab KinectJointsRealtime.csv file is empty, used to make the skeleton stable.
+Position* lastKnownPos;
+
+// a flag to decide whether to get realtime data or not
+bool realtime = false;
 
 int main() {
 
@@ -104,38 +110,6 @@ int main() {
     unsigned int gridIndices[] = {
 
             0, 1, 2, 3
-
-    };
-
-    float cubeVertices[] {
-
-        // position          // color
-        6.0f, 0.0f, 6.0f,    0.0f, 0.5f, 0.0f,
-        5.0f, 0.0f, 6.0f,    0.0f, 0.5f, 0.0f,
-        5.0f, 1.0f, 6.0f,    0.0f, 0.5f, 0.0f,
-        6.0f, 1.0f, 6.0f,    0.0f, 0.5f, 0.0f,
-
-        6.0f, 0.0f, 5.0f,    0.0f, 0.5f, 0.0f,
-        5.0f, 0.0f, 5.0f,    0.0f, 0.5f, 0.0f,
-        5.0f, 1.0f, 5.0f,    0.0f, 0.5f, 0.0f,
-        6.0f, 1.0f, 5.0f,    0.0f, 0.5f, 0.0f,
-
-    };
-
-    unsigned int cubeIndices[] = {
-
-        0, 1, 2,    // front face
-        0, 2, 3,
-        4, 5, 6,    // back face
-        4, 6, 7,
-        2, 7, 3,    // upper face
-        2, 6, 7,
-        0, 1, 4,    // lower face
-        1, 5, 4,
-        4, 3, 7,    // left face
-        4, 0, 3,
-        1, 5, 2,    // right face
-        5, 6, 2
 
     };
 
@@ -195,70 +169,6 @@ int main() {
     // re-assignment
     std::vector<Joint*> joints = allInterPos[skeletonFrame]->getJoints();
 
-    // This kind of offsets were the fastest way to get a constant translation in the middle of the grid
-    float skeletonVertices[] = {
-
-            joints[0]->getX() + 6, joints[0]->getY() + (float)2.5, joints[0]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[1]->getX() + 6, joints[1]->getY() + (float)2.5, joints[1]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[2]->getX() + 6, joints[2]->getY() + (float)2.5, joints[2]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[3]->getX() + 6, joints[3]->getY() + (float)2.5, joints[3]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[4]->getX() + 6, joints[4]->getY() + (float)2.5, joints[4]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[5]->getX() + 6, joints[5]->getY() + (float)2.5, joints[5]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[6]->getX() + 6, joints[6]->getY() + (float)2.5, joints[6]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[7]->getX() + 6, joints[7]->getY() + (float)2.5, joints[7]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[8]->getX() + 6, joints[8]->getY() + (float)2.5, joints[8]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[9]->getX() + 6, joints[9]->getY() + (float)2.5, joints[9]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[10]->getX() + 6, joints[10]->getY() + (float)2.5, joints[10]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[11]->getX() + 6, joints[11]->getY() + (float)2.5, joints[11]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[12]->getX() + 6, joints[12]->getY() + (float)2.5, joints[12]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[13]->getX() + 6, joints[13]->getY() + (float)2.5, joints[13]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[14]->getX() + 6, joints[14]->getY() + (float)2.5, joints[14]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[15]->getX() + 6, joints[15]->getY() + (float)2.5, joints[15]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[16]->getX() + 6, joints[16]->getY() + (float)2.5, joints[16]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[17]->getX() + 6, joints[17]->getY() + (float)2.5, joints[17]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[18]->getX() + 6, joints[18]->getY() + (float)2.5, joints[18]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[19]->getX() + 6, joints[19]->getY() + (float)2.5, joints[19]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[20]->getX() + 6, joints[20]->getY() + (float)2.5, joints[20]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[21]->getX() + 6, joints[21]->getY() + (float)2.5, joints[21]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[22]->getX() + 6, joints[22]->getY() + (float)2.5, joints[22]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[23]->getX() + 6, joints[23]->getY() + (float)2.5, joints[23]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[24]->getX() + 6, joints[24]->getY() + (float)2.5, joints[24]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-
-    };
-
-    unsigned int skeletonIndices[] = {
-
-            3, 2,        // HEAD - NECK
-            2, 20,       // NECK - SPINE
-
-            20, 4,       // SPINE - SHOULDER_LEFT
-            4, 5,        // SHOULDER_LEFT - ELBOW__LEFT
-            5, 6,        // ELBOW_LEFT - WRIST_LEFT
-            6, 22,       // WRIST_LEFT - THUMB_LEFT
-            6, 7,        // WRIST_LEFT - HAND_LEFT
-            7, 21,       // HAND_LEFT - HANF_TIP_LEFT
-
-            20, 8,       // SPINE - SHOULDER_RIGHT
-            8, 9,        // SHOULDER_RIGHT - ELBOW_RIGHT
-            9, 10,       // ELBOW_RIGHT - WRIST_RIGHT
-            10, 24,      // WRIST_RIGHT - THUMB_RIGHT
-            10, 11,      // WRIST_RIGHT - HAND_RIGHT
-            11, 23,      // HAND_RIGHT - HAND_TIP_RIGHT
-
-            20, 1,       // SPINE - SPINE_MID
-            1, 0,        // SPINE_MID - SPINE_BASE
-
-            0, 12,       // SPINE_BASE - HIP_LEFT
-            12, 13,      // HIP_LEFT - KNEE_LEFT
-            13, 14,      // KNEE_LEFT - ANKLE_LEFT
-            14, 15,      // ANKLE_LEFT - FOOT_LEFT
-
-            0, 16,       // SPINE_BASE - HIP_RIGHT
-            16, 17,      // HIP_RIGHT - KNEE_RIGHT
-            17, 18,      // KNEE_RIGHT - ANKLE_RIGHT
-            18, 19,      // ANKLE_RIGHT - FOOT_RIGHT
-
-    };
 
     // --------------------- GRID ------------------------------
 
@@ -281,31 +191,6 @@ int main() {
     // color
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
-
-    // --------------------- CUBE ------------------------------
-
-    unsigned int cubeVAO, cubeVBO, cubeEBO;
-
-    glGenVertexArrays(1, &cubeVAO);
-    glBindVertexArray(cubeVAO);
-
-    glGenBuffers(1, &cubeVBO);
-    glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
-
-    glGenBuffers(1, &cubeEBO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeEBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), cubeIndices, GL_STATIC_DRAW);
-
-    // position
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_TRUE, 6 * sizeof(float), nullptr);
-    glEnableVertexAttribArray(0);
-
-    // color
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     // ---------------------- COORDINATE SYSTEM ------------------------
 
@@ -333,74 +218,31 @@ int main() {
 
     // ---------------------- SKELETON -----------------------------------
 
-    unsigned int skeletonVAO, skeletonVBO, skeletonEBO;
-    glGenVertexArrays(1, &skeletonVAO);
-    glBindVertexArray(skeletonVAO);
-
-    glGenBuffers(1, &skeletonVBO);
-    glBindBuffer(GL_ARRAY_BUFFER, skeletonVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(skeletonVertices), skeletonVertices, GL_STATIC_DRAW);
-
-    glGenBuffers(1, &skeletonEBO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, skeletonEBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(skeletonIndices), skeletonIndices, GL_STATIC_DRAW);
-
-    // position
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_TRUE, 6 * sizeof(float), nullptr);
-    glEnableVertexAttribArray(0);
-
-    // color
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
     shader.use();
 
-    float duration = 0;
     double timerStart, timerEnd;
-
-    std::ifstream file("KinectJointsRealtime.csv");
 
     while(!glfwWindowShouldClose(window)) {
 
-        /*timerStart = glfwGetTime();
-        // Animation...?
-        joints = allInterPos[skeletonFrame % allInterPos.size()]->getJoints();
-        float skeletonVertices2[] = {
+        // NON REALTIME ANIMATION
+        /** If you don't want a realtime animation, uncomment this and comment the 3* parts **/
+        if(!realtime) {
+            timerStart = glfwGetTime();
+            joints = allInterPos[skeletonFrame % allInterPos.size()]->getJoints();
+        }
+        /** Comment this far **/
 
-                joints[0]->getX() + 6, joints[0]->getY() + (float)2.5, joints[0]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[1]->getX() + 6, joints[1]->getY() + (float)2.5, joints[1]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[2]->getX() + 6, joints[2]->getY() + (float)2.5, joints[2]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[3]->getX() + 6, joints[3]->getY() + (float)2.5, joints[3]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[4]->getX() + 6, joints[4]->getY() + (float)2.5, joints[4]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[5]->getX() + 6, joints[5]->getY() + (float)2.5, joints[5]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[6]->getX() + 6, joints[6]->getY() + (float)2.5, joints[6]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[7]->getX() + 6, joints[7]->getY() + (float)2.5, joints[7]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[8]->getX() + 6, joints[8]->getY() + (float)2.5, joints[8]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[9]->getX() + 6, joints[9]->getY() + (float)2.5, joints[9]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[10]->getX() + 6, joints[10]->getY() + (float)2.5, joints[10]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[11]->getX() + 6, joints[11]->getY() + (float)2.5, joints[11]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[12]->getX() + 6, joints[12]->getY() + (float)2.5, joints[12]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[13]->getX() + 6, joints[13]->getY() + (float)2.5, joints[13]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[14]->getX() + 6, joints[14]->getY() + (float)2.5, joints[14]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[15]->getX() + 6, joints[15]->getY() + (float)2.5, joints[15]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[16]->getX() + 6, joints[16]->getY() + (float)2.5, joints[16]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[17]->getX() + 6, joints[17]->getY() + (float)2.5, joints[17]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[18]->getX() + 6, joints[18]->getY() + (float)2.5, joints[18]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[19]->getX() + 6, joints[19]->getY() + (float)2.5, joints[19]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[20]->getX() + 6, joints[20]->getY() + (float)2.5, joints[20]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[21]->getX() + 6, joints[21]->getY() + (float)2.5, joints[21]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[22]->getX() + 6, joints[22]->getY() + (float)2.5, joints[22]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[23]->getX() + 6, joints[23]->getY() + (float)2.5, joints[23]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-                joints[24]->getX() + 6, joints[24]->getY() + (float)2.5, joints[24]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-
-        };*/
-
+        // TODO: sometimes it crashes, maybe it's just a bad allocation due to the realtime data read. Investigate this a bit further.
+        // TODO: Edit: this is definitely a timing problem: the heavier the code, the more frequent the crash. Keep it featherweight!
         // REALTIME ANIMATION! To use it, you will need:
         // https://it.mathworks.com/matlabcentral/fileexchange/53439-kinect-2-interface-for-matlab
         // Just copy the videoDemo.m and videoDemoWithWindows.m scripts inside the project's folder and run one of them
-
-        std::vector<Position *> positionsRealtime = getJointPositionsRealtime("../KinectJointsRealtime.csv");
-        joints = positionsRealtime[0]->getJoints();
+        /*** If you want a realtime animation, uncomment this and comment the 2* parts ***/
+        else {
+            std::vector<Position *> positionsRealtime = getJointPositionsRealtime("../KinectJointsRealtime.csv");
+            joints = positionsRealtime[0]->getJoints();
+        }
+        /*** Comment this far ***/
 
         float skeletonVertices2[] = {
 
@@ -439,34 +281,33 @@ int main() {
         processInput(window);
 
         drawGrid(&shader, gridVAO, gridEBO, sizeof(gridIndices));
-        // drawCube(&shader, cubeVAO, cubeEBO, sizeof(cubeIndices));
-        // drawCubeContours(&cubeWithContoursShader, cubeVAO, cubeEBO, sizeof(cubeIndices));
+        for(int i = 0; i < joints.size(); i++) {
+            drawCube(&shader, {joints[i]->getX() + 6, joints[i]->getY() + (float) 2.5, joints[i]->getZ() + 2}, 0.10, {1.0, 1.0, 1.0});
+        }
         drawCoordSystem(&shader, coordVAO, coordEBO, sizeof(coordIndices));
-        glBufferData(GL_ARRAY_BUFFER, sizeof(skeletonVertices2), skeletonVertices2, GL_STATIC_DRAW);
-        drawSkeleton(&skeletonShader, skeletonVAO, skeletonEBO, sizeof(skeletonIndices));
+        drawSkeleton(&skeletonShader, allInterPos, skeletonFrame % allInterPos.size());
 
         glfwSwapBuffers(window);
         glfwPollEvents();
 
-        timerEnd = glfwGetTime();
-        if(timerEnd - timerStart < 1 / (double)60) {
-            sleep(1 - (timerEnd - timerStart));
-            skeletonFrame++;
+        /*** If you don't want a realtime animation, uncomment this and comment the 2* parts ***/
+        if(!realtime) {
+            timerEnd = glfwGetTime();
+            if (timerEnd - timerStart < 1 / (double) 60) {
+                sleep(1 - (timerEnd - timerStart));
+                skeletonFrame++;
+            }
         }
+        /*** Comment this far ***/
+
     }
 
     glDeleteVertexArrays(1, &gridVAO);
     glDeleteBuffers(1, &gridVBO);
     glDeleteBuffers(1, &gridEBO);
-    glDeleteVertexArrays(1, &cubeVAO);
-    glDeleteBuffers(1, &cubeVBO);
-    glDeleteBuffers(1, &cubeEBO);
     glDeleteVertexArrays(1, &coordVAO);
     glDeleteBuffers(1, &coordVBO);
     glDeleteBuffers(1, &coordEBO);
-    glDeleteVertexArrays(1, &skeletonVAO);
-    glDeleteBuffers(1, &skeletonVBO);
-    glDeleteBuffers(1, &skeletonEBO);
 
     glfwTerminate();
     return 0;
@@ -549,7 +390,73 @@ void drawGrid(Shader* shader, unsigned int gridVAO, unsigned int gridEBO, int nu
     }
 }
 
-void drawCube(Shader* shader, unsigned int cubeVAO, unsigned int cubeEBO, int numVertices) {
+void drawCube(Shader* shader, std::vector<float> center, float sideLength, std::vector<float> colorRGB) {
+
+    GLfloat centerX = center[0];
+    GLfloat centerY = center[1];
+    GLfloat centerZ = center[2];
+
+    GLfloat halfSide = sideLength * 0.5;
+
+    GLfloat colorR = colorRGB[0];
+    GLfloat colorG = colorRGB[1];
+    GLfloat colorB = colorRGB[2];
+
+
+    float cubeVertices[] {
+
+            // position                                                    // color
+            centerX - halfSide, centerY - halfSide, centerZ + halfSide,    colorR, colorG, colorB,
+            centerX + halfSide, centerY - halfSide, centerZ + halfSide,    colorR, colorG, colorB,
+            centerX + halfSide, centerY + halfSide, centerZ + halfSide,    colorR, colorG, colorB,
+            centerX - halfSide, centerY + halfSide, centerZ + halfSide,    colorR, colorG, colorB,
+
+            centerX - halfSide, centerY - halfSide, centerZ - halfSide,    colorR, colorG, colorB,
+            centerX + halfSide, centerY - halfSide, centerZ - halfSide,    colorR, colorG, colorB,
+            centerX + halfSide, centerY + halfSide, centerZ - halfSide,    colorR, colorG, colorB,
+            centerX - halfSide, centerY + halfSide, centerZ - halfSide,    colorR, colorG, colorB,
+
+    };
+
+    unsigned int cubeIndices[] = {
+
+            0, 1, 2,    // front face
+            0, 2, 3,
+            4, 5, 6,    // back face
+            4, 6, 7,
+            2, 7, 3,    // upper face
+            2, 6, 7,
+            0, 1, 4,    // lower face
+            1, 5, 4,
+            4, 3, 7,    // left face
+            4, 0, 3,
+            1, 5, 2,    // right face
+            5, 6, 2
+
+    };
+
+    unsigned int cubeVAO, cubeVBO, cubeEBO;
+
+    glGenVertexArrays(1, &cubeVAO);
+    glBindVertexArray(cubeVAO);
+
+    glGenBuffers(1, &cubeVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_DYNAMIC_DRAW);
+
+    glGenBuffers(1, &cubeEBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), cubeIndices, GL_DYNAMIC_DRAW);
+
+    // position
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_TRUE, 6 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(0);
+
+    // color
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     glLineWidth(4.0f);
 
@@ -558,7 +465,7 @@ void drawCube(Shader* shader, unsigned int cubeVAO, unsigned int cubeEBO, int nu
 
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-    glDrawElements(GL_TRIANGLES, numVertices, GL_UNSIGNED_INT, nullptr);
+    glDrawElements(GL_TRIANGLES, sizeof(cubeVertices), GL_UNSIGNED_INT, nullptr);
 
 }
 
@@ -575,12 +482,98 @@ void drawCubeContours(Shader* shader, unsigned int cubeVAO, unsigned int cubeEBO
 
 }
 
-void drawSkeleton(Shader* shader, unsigned int skeletonVAO, unsigned int skeletonEBO, int numVertices) {
+void drawSkeleton(Shader* shader, std::vector<Position*> allInterPos, int skeletonFrame) {
+
+    // since the allInterPos vector contains >> positions than positions, the animation is more fluid even without
+    // re-assignment
+    std::vector<Joint*> joints = allInterPos[skeletonFrame]->getJoints();
+
+    // This kind of offsets were the fastest way to get a constant translation in the middle of the grid
+    float skeletonVertices[] = {
+
+            joints[0]->getX() + 6, joints[0]->getY() + (float)2.5, joints[0]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[1]->getX() + 6, joints[1]->getY() + (float)2.5, joints[1]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[2]->getX() + 6, joints[2]->getY() + (float)2.5, joints[2]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[3]->getX() + 6, joints[3]->getY() + (float)2.5, joints[3]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[4]->getX() + 6, joints[4]->getY() + (float)2.5, joints[4]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[5]->getX() + 6, joints[5]->getY() + (float)2.5, joints[5]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[6]->getX() + 6, joints[6]->getY() + (float)2.5, joints[6]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[7]->getX() + 6, joints[7]->getY() + (float)2.5, joints[7]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[8]->getX() + 6, joints[8]->getY() + (float)2.5, joints[8]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[9]->getX() + 6, joints[9]->getY() + (float)2.5, joints[9]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[10]->getX() + 6, joints[10]->getY() + (float)2.5, joints[10]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[11]->getX() + 6, joints[11]->getY() + (float)2.5, joints[11]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[12]->getX() + 6, joints[12]->getY() + (float)2.5, joints[12]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[13]->getX() + 6, joints[13]->getY() + (float)2.5, joints[13]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[14]->getX() + 6, joints[14]->getY() + (float)2.5, joints[14]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[15]->getX() + 6, joints[15]->getY() + (float)2.5, joints[15]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[16]->getX() + 6, joints[16]->getY() + (float)2.5, joints[16]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[17]->getX() + 6, joints[17]->getY() + (float)2.5, joints[17]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[18]->getX() + 6, joints[18]->getY() + (float)2.5, joints[18]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[19]->getX() + 6, joints[19]->getY() + (float)2.5, joints[19]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[20]->getX() + 6, joints[20]->getY() + (float)2.5, joints[20]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[21]->getX() + 6, joints[21]->getY() + (float)2.5, joints[21]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[22]->getX() + 6, joints[22]->getY() + (float)2.5, joints[22]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[23]->getX() + 6, joints[23]->getY() + (float)2.5, joints[23]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+            joints[24]->getX() + 6, joints[24]->getY() + (float)2.5, joints[24]->getZ() + 2,    1.0f, 0.0f, 1.0f,
+
+    };
+
+    unsigned int skeletonIndices[] = {
+
+            3, 2,        // HEAD - NECK
+            2, 20,       // NECK - SPINE
+
+            20, 4,       // SPINE - SHOULDER_LEFT
+            4, 5,        // SHOULDER_LEFT - ELBOW__LEFT
+            5, 6,        // ELBOW_LEFT - WRIST_LEFT
+            6, 22,       // WRIST_LEFT - THUMB_LEFT
+            6, 7,        // WRIST_LEFT - HAND_LEFT
+            7, 21,       // HAND_LEFT - HANF_TIP_LEFT
+
+            20, 8,       // SPINE - SHOULDER_RIGHT
+            8, 9,        // SHOULDER_RIGHT - ELBOW_RIGHT
+            9, 10,       // ELBOW_RIGHT - WRIST_RIGHT
+            10, 24,      // WRIST_RIGHT - THUMB_RIGHT
+            10, 11,      // WRIST_RIGHT - HAND_RIGHT
+            11, 23,      // HAND_RIGHT - HAND_TIP_RIGHT
+
+            20, 1,       // SPINE - SPINE_MID
+            1, 0,        // SPINE_MID - SPINE_BASE
+
+            0, 12,       // SPINE_BASE - HIP_LEFT
+            12, 13,      // HIP_LEFT - KNEE_LEFT
+            13, 14,      // KNEE_LEFT - ANKLE_LEFT
+            14, 15,      // ANKLE_LEFT - FOOT_LEFT
+
+            0, 16,       // SPINE_BASE - HIP_RIGHT
+            16, 17,      // HIP_RIGHT - KNEE_RIGHT
+            17, 18,      // KNEE_RIGHT - ANKLE_RIGHT
+            18, 19,      // ANKLE_RIGHT - FOOT_RIGHT
+
+    };
+
+    unsigned int skeletonVAO, skeletonVBO, skeletonEBO;
+    glGenVertexArrays(1, &skeletonVAO);
+    glBindVertexArray(skeletonVAO);
+
+    glGenBuffers(1, &skeletonVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, skeletonVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(skeletonVertices), skeletonVertices, GL_DYNAMIC_DRAW);
+
+    glGenBuffers(1, &skeletonEBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, skeletonEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(skeletonIndices), skeletonIndices, GL_DYNAMIC_DRAW);
+
+    // position
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_TRUE, 6 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(0);
+
+    // color
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
 
     glLineWidth(7.0f);
-
-    glBindVertexArray(skeletonVAO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, skeletonEBO);
 
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
@@ -588,7 +581,7 @@ void drawSkeleton(Shader* shader, unsigned int skeletonVAO, unsigned int skeleto
     model = glm::translate(model, glm::vec3(-12.5f, 0.0f, -12.5f));
     shader->setMat4("modelSkeleton", model);
 
-    glDrawElements(GL_LINES, numVertices, GL_UNSIGNED_INT, nullptr);
+    glDrawElements(GL_LINES, sizeof(skeletonVertices), GL_UNSIGNED_INT, nullptr);
     
 }
 
@@ -685,6 +678,7 @@ std::vector<Position*> getJointPositionsRealtime(std::string fileName) {
                                             2 * std::stof(row[i + j + 2])));
                 }
                 positions.push_back(position);
+                lastKnownPos = position;
             }
 
         }
@@ -693,11 +687,8 @@ std::vector<Position*> getJointPositionsRealtime(std::string fileName) {
     }
 
     if(positions.empty()) {
-        std::vector<Joint*> joints;
-        for(int k = 0; k < 75; k++) {
-            joints.push_back(new Joint(3, 3, 3));
-        }
-        positions.push_back(new Position(joints));
+        if(!lastKnownPos)
+        positions.push_back(lastKnownPos);
     }
 
     return positions;

@@ -1,4 +1,4 @@
-% BODYDEMO Illustrates how to use the Kin2 object to get and draw the
+s% BODYDEMO Illustrates how to use the Kin2 object to get and draw the
 % Skeleton data
 %
 % Juan R. Terven, jrterven@hotmail.com
