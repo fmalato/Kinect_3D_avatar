@@ -5,6 +5,11 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <GL/gl.h>
+#include <GL/glu.h>
+#include <GL/glut.h>
+#include <GL/freeglut.h>
+
 #include <iostream>
 #include <string>
 #include <fstream>
@@ -23,6 +28,9 @@
 #include "Shader.h"
 #include "Camera.h"
 #include "Position.h"
+// #include "Polygon.h"
+
+#define PI 3.141592653
 
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
@@ -33,9 +41,12 @@ void scrollCallback(GLFWwindow* window, double offsetX, double offsetY);
 void drawGrid(Shader* shader, unsigned int gridVAO, unsigned int gridEBO, int numVertices);
 void drawCube(Shader* shader, std::vector<float> center, float sideLength, std::vector<float> colorRGB);
 void drawCoordSystem(Shader* shader, unsigned int coordVAO, unsigned int coordEBO, int numVertices);
-void drawSkeleton(Shader* shader, std::vector<Position*> allInterPos, int skeletonFrame);
-void drawSkeletonRealtime(Shader* shader, std::vector<Joint*> joints);
-void drawCubeContours(Shader* shader, unsigned int cubeVAO, unsigned int cubeEBO, int numVertices);
+void drawSkeleton(Shader* shader, std::vector<Position*> allInterPos, int skeletonFrame, std::vector<float> colorRGB);
+void drawSkeletonRealtime(Shader* shader, std::vector<Joint*> joints, std::vector<float> colorRGB);
+/*Polygon* drawPolygon2D(Shader* shader, float radius, int numSides,  bool rotation, std::vector<float> rotationAxis,
+        float rotationAngle, std::vector<float> center, std::vector<float> colorRGB);*/
+void drawSphere(Shader* shader, float radius, std::vector<float> center, std::vector<float> colorRGB);
+//void linkTwoPolygons(Shader* shader, Polygon* p1, Polygon* p2, int numSides);
 
 // data management functions
 std::vector<Position*> getJointPositions(std::string fileName);
@@ -59,13 +70,36 @@ float lastFrame = 0.0f;
 
 // a one-position buffer in case the MatLab KinectJointsRealtime.csv file is empty, used to make the skeleton stable.
 Position* lastKnownPos;
+int skeletonFrame = 0;
 
 // a flag to decide whether to get realtime data or not
-bool realtime = true;
+bool realtime = false;
 
-int main() {
+int main(int argcp, char **argv) {
 
-    std::vector<Position*> positions = getJointPositions("../KinectJoints.csv");
+    std::vector<Position*>allInterPos;
+    std::vector<Joint*> joints;
+    if(!realtime) {
+        std::vector<Position *> positions = getJointPositions("../KinectJoints.csv");
+
+        // Smoothing the animation
+        int times = 8;
+        int currentPos = 0;
+        for(int i = 0; i < positions.size() - 1; i++) {
+            std::cout << "interpolating between positions " << currentPos << " and " << currentPos + 1 << std::endl;
+            std::vector<Position*> interPositions = interpolate(positions[i], positions[i + 1], times);
+            for(auto itr = interPositions.begin(); itr != interPositions.end(); itr++) {
+                allInterPos.push_back(*itr);
+            }
+            currentPos++;
+        }
+
+        std::cout << "Current number of frames: " << allInterPos.size() << std::endl;
+
+        // since the allInterPos vector contains >> positions than positions, the animation is more fluid even without
+        // re-assignment
+        joints = allInterPos[skeletonFrame]->getJoints();
+    }
 
     std::vector<Joint*> startingPos;
     for(int i = 0; i < 25; i++) {
@@ -73,10 +107,11 @@ int main() {
     }
     lastKnownPos = new Position(startingPos);
 
+    glutInit(&argcp, argv);
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
 
     GLFWwindow* window = glfwCreateWindow(WIN_WIDTH, WIN_HEIGHT, "Kinect 3D avatar", nullptr, nullptr);
 
@@ -100,8 +135,8 @@ int main() {
     glEnable(GL_DEPTH_TEST);
 
     Shader shader("../Shaders/vertexShader.vert", "../Shaders/fragmentShader.frag");
-    Shader skeletonShader("../Shaders/skeletonVertShader.vert", "../Shaders/skeletonFragShader.frag");
-    // Shader cubeWithContoursShader("../Shaders/cubeContoursVertShader.vert", "../Shaders/cubeContoursFragShader.frag");
+    Shader polygonShader("../Shaders/polygonVertShader.vert", "../Shaders/polygonFragShader.frag");
+
     float currentFrame;
 
     float gridVertices[] = {
@@ -156,27 +191,6 @@ int main() {
 
     };
 
-    // Smoothing the animation
-    int times = 8;
-    int currentPos = 0;
-    std::vector<Position*>allInterPos;
-    for(int i = 0; i < positions.size() - 1; i++) {
-        std::cout << "interpolating between positions " << currentPos << " and " << currentPos + 1 << std::endl;
-        std::vector<Position*> interPositions = interpolate(positions[i], positions[i + 1], times);
-        for(auto itr = interPositions.begin(); itr != interPositions.end(); itr++) {
-            allInterPos.push_back(*itr);
-        }
-        currentPos++;
-    }
-
-    std::cout << "Current number of frames: " << allInterPos.size() << std::endl;
-
-    int skeletonFrame = 0;
-    // since the allInterPos vector contains >> positions than positions, the animation is more fluid even without
-    // re-assignment
-    std::vector<Joint*> joints = allInterPos[skeletonFrame]->getJoints();
-
-
     // --------------------- GRID ------------------------------
 
     unsigned int gridVAO, gridVBO, gridEBO;
@@ -223,8 +237,6 @@ int main() {
 
     glPointSize(15.0f);
 
-    // ---------------------- SKELETON -----------------------------------
-
     shader.use();
 
     double timerStart, timerEnd;
@@ -262,14 +274,28 @@ int main() {
         drawGrid(&shader, gridVAO, gridEBO, sizeof(gridIndices));
         for(int i = 0; i < joints.size(); i++) {
             drawCube(&shader, {joints[i]->getX() + 6, joints[i]->getY() + (float) 2.5, joints[i]->getZ() + 2}, 0.10, {1.0, 1.0, 1.0});
+            // drawSphere(&polygonShader, 0.1f, {joints[i]->getX() + 6, joints[i]->getY() + (float) 2.5, joints[i]->getZ() + 2}, {0.0f, 0.0f, 1.0f});
         }
         drawCoordSystem(&shader, coordVAO, coordEBO, sizeof(coordIndices));
         if(!realtime) {
-            drawSkeleton(&skeletonShader, allInterPos, skeletonFrame % allInterPos.size());
+            drawSkeleton(&shader, allInterPos, skeletonFrame % allInterPos.size(), {1.0f, 0.0f, 0.0f});
         }
         else {
-            drawSkeletonRealtime(&skeletonShader, joints);
+            drawSkeletonRealtime(&shader, joints, {1.0f, 0.0f, 0.0f});
         }
+
+        /*drawPolygon2D(&shader, 0.15, 20, false, {0.0f, 0.0f, 0.0f}, 0.0f,
+                {joints[11]->getX() + 6, joints[11]->getY() + (float) 2.5, joints[11]->getZ() + 2}, {0.0f, 1.0f, 0.0f});
+        drawPolygon2D(&shader, 0.15, 20, false, {0.0f, 0.0f, 0.0f}, 0.0f,
+                {joints[7]->getX() + 6, joints[7]->getY() + (float) 2.5, joints[7]->getZ() + 2}, {0.0f, 1.0f, 0.0f});*/
+        // drawSphere(&polygonShader, 1.0, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 1.0f});
+
+        glColor3f(1.0f, 0.0f, 0.0f);
+        glPushMatrix();
+        glTranslated(2.0, 2.0, 2.0);
+        glutSolidSphere(1, 50, 50);
+        glPopMatrix();
+
         glfwSwapBuffers(window);
         glfwPollEvents();
 
@@ -278,6 +304,9 @@ int main() {
             timerEnd = glfwGetTime();
             if (timerEnd - timerStart < 1 / (double) 60) {
                 sleep(1 - (timerEnd - timerStart));
+                skeletonFrame++;
+            }
+            else {
                 skeletonFrame++;
             }
         }
@@ -321,7 +350,7 @@ void mouseCallback(GLFWwindow* window, double posX, double posY) {
 }
 void scrollCallback(GLFWwindow* window, double offsetX, double offsetY) {
 
-    camera.ProcessMouseScroll(offsetY);
+    camera.ProcessMouseScroll((float)offsetY);
 
 }
 
@@ -375,11 +404,13 @@ void drawGrid(Shader* shader, unsigned int gridVAO, unsigned int gridEBO, int nu
 
 void drawCube(Shader* shader, std::vector<float> center, float sideLength, std::vector<float> colorRGB) {
 
+    shader->use();
+
     GLfloat centerX = center[0];
     GLfloat centerY = center[1];
     GLfloat centerZ = center[2];
 
-    GLfloat halfSide = sideLength * 0.5;
+    GLfloat halfSide = sideLength * (GLfloat)0.5;
 
     GLfloat colorR = colorRGB[0];
     GLfloat colorG = colorRGB[1];
@@ -439,8 +470,6 @@ void drawCube(Shader* shader, std::vector<float> center, float sideLength, std::
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
     glLineWidth(4.0f);
 
     glBindVertexArray(cubeVAO);
@@ -452,55 +481,27 @@ void drawCube(Shader* shader, std::vector<float> center, float sideLength, std::
 
 }
 
-void drawCubeContours(Shader* shader, unsigned int cubeVAO, unsigned int cubeEBO, int numVertices) {
+void drawSkeleton(Shader* shader, std::vector<Position*> allInterPos, int skeletonFrame, std::vector<float> colorRGB) {
 
-    glLineWidth(4.0f);
-
-    glBindVertexArray(cubeVAO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeEBO);
-
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
-    glDrawElements(GL_TRIANGLES, numVertices, GL_UNSIGNED_INT, nullptr);
-
-}
-
-void drawSkeleton(Shader* shader, std::vector<Position*> allInterPos, int skeletonFrame) {
+    shader->use();
 
     // since the allInterPos vector contains >> positions than positions, the animation is more fluid even without
     // re-assignment
     std::vector<Joint*> joints = allInterPos[skeletonFrame]->getJoints();
 
+    float skeletonVertices[joints.size() * 6];
+    int current = 0;
+
     // This kind of offsets were the fastest way to get a constant translation in the middle of the grid
-    float skeletonVertices[] = {
-
-            joints[0]->getX() + 6, joints[0]->getY() + (float)2.5, joints[0]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[1]->getX() + 6, joints[1]->getY() + (float)2.5, joints[1]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[2]->getX() + 6, joints[2]->getY() + (float)2.5, joints[2]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[3]->getX() + 6, joints[3]->getY() + (float)2.5, joints[3]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[4]->getX() + 6, joints[4]->getY() + (float)2.5, joints[4]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[5]->getX() + 6, joints[5]->getY() + (float)2.5, joints[5]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[6]->getX() + 6, joints[6]->getY() + (float)2.5, joints[6]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[7]->getX() + 6, joints[7]->getY() + (float)2.5, joints[7]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[8]->getX() + 6, joints[8]->getY() + (float)2.5, joints[8]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[9]->getX() + 6, joints[9]->getY() + (float)2.5, joints[9]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[10]->getX() + 6, joints[10]->getY() + (float)2.5, joints[10]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[11]->getX() + 6, joints[11]->getY() + (float)2.5, joints[11]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[12]->getX() + 6, joints[12]->getY() + (float)2.5, joints[12]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[13]->getX() + 6, joints[13]->getY() + (float)2.5, joints[13]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[14]->getX() + 6, joints[14]->getY() + (float)2.5, joints[14]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[15]->getX() + 6, joints[15]->getY() + (float)2.5, joints[15]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[16]->getX() + 6, joints[16]->getY() + (float)2.5, joints[16]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[17]->getX() + 6, joints[17]->getY() + (float)2.5, joints[17]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[18]->getX() + 6, joints[18]->getY() + (float)2.5, joints[18]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[19]->getX() + 6, joints[19]->getY() + (float)2.5, joints[19]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[20]->getX() + 6, joints[20]->getY() + (float)2.5, joints[20]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[21]->getX() + 6, joints[21]->getY() + (float)2.5, joints[21]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[22]->getX() + 6, joints[22]->getY() + (float)2.5, joints[22]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[23]->getX() + 6, joints[23]->getY() + (float)2.5, joints[23]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[24]->getX() + 6, joints[24]->getY() + (float)2.5, joints[24]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-
-    };
+    for(int i = 0; i < joints.size() * 6; i += 6) {
+        skeletonVertices[i] = joints[current]->getX() + 6;
+        skeletonVertices[i + 1] = joints[current]->getY() + (float)2.5;
+        skeletonVertices[i + 2] = joints[current]->getZ() + 2;
+        skeletonVertices[i + 3] = colorRGB[0];
+        skeletonVertices[i + 4] = colorRGB[1];
+        skeletonVertices[i + 5] = colorRGB[2];
+        current++;
+    }
 
     unsigned int skeletonIndices[] = {
 
@@ -568,38 +569,24 @@ void drawSkeleton(Shader* shader, std::vector<Position*> allInterPos, int skelet
     
 }
 
-void drawSkeletonRealtime(Shader* shader, std::vector<Joint*> joints) {
+void drawSkeletonRealtime(Shader* shader, std::vector<Joint*> joints, std::vector<float> colorRGB) {
+
+    shader->use();
 
     // This kind of offsets were the fastest way to get a constant translation in the middle of the grid
-    float skeletonVertices[] = {
+    float skeletonVertices[joints.size() * 6];
+    int current = 0;
 
-            joints[0]->getX() + 6, joints[0]->getY() + (float)2.5, joints[0]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[1]->getX() + 6, joints[1]->getY() + (float)2.5, joints[1]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[2]->getX() + 6, joints[2]->getY() + (float)2.5, joints[2]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[3]->getX() + 6, joints[3]->getY() + (float)2.5, joints[3]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[4]->getX() + 6, joints[4]->getY() + (float)2.5, joints[4]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[5]->getX() + 6, joints[5]->getY() + (float)2.5, joints[5]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[6]->getX() + 6, joints[6]->getY() + (float)2.5, joints[6]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[7]->getX() + 6, joints[7]->getY() + (float)2.5, joints[7]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[8]->getX() + 6, joints[8]->getY() + (float)2.5, joints[8]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[9]->getX() + 6, joints[9]->getY() + (float)2.5, joints[9]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[10]->getX() + 6, joints[10]->getY() + (float)2.5, joints[10]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[11]->getX() + 6, joints[11]->getY() + (float)2.5, joints[11]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[12]->getX() + 6, joints[12]->getY() + (float)2.5, joints[12]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[13]->getX() + 6, joints[13]->getY() + (float)2.5, joints[13]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[14]->getX() + 6, joints[14]->getY() + (float)2.5, joints[14]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[15]->getX() + 6, joints[15]->getY() + (float)2.5, joints[15]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[16]->getX() + 6, joints[16]->getY() + (float)2.5, joints[16]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[17]->getX() + 6, joints[17]->getY() + (float)2.5, joints[17]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[18]->getX() + 6, joints[18]->getY() + (float)2.5, joints[18]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[19]->getX() + 6, joints[19]->getY() + (float)2.5, joints[19]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[20]->getX() + 6, joints[20]->getY() + (float)2.5, joints[20]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[21]->getX() + 6, joints[21]->getY() + (float)2.5, joints[21]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[22]->getX() + 6, joints[22]->getY() + (float)2.5, joints[22]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[23]->getX() + 6, joints[23]->getY() + (float)2.5, joints[23]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-            joints[24]->getX() + 6, joints[24]->getY() + (float)2.5, joints[24]->getZ() + 2,    1.0f, 0.0f, 1.0f,
-
-    };
+    // This kind of offsets were the fastest way to get a constant translation in the middle of the grid
+    for(int i = 0; i < joints.size() * 6; i += 6) {
+        skeletonVertices[i] = joints[current]->getX() + 6;
+        skeletonVertices[i + 1] = joints[current]->getY() + (float)2.5;
+        skeletonVertices[i + 2] = joints[current]->getZ() + 2;
+        skeletonVertices[i + 3] = colorRGB[0];
+        skeletonVertices[i + 4] = colorRGB[1];
+        skeletonVertices[i + 5] = colorRGB[2];
+        current++;
+    }
 
     unsigned int skeletonIndices[] = {
 
@@ -669,6 +656,8 @@ void drawSkeletonRealtime(Shader* shader, std::vector<Joint*> joints) {
 
 void drawCoordSystem(Shader* shader, unsigned int coordVAO, unsigned int coordEBO, int numVertices) {
 
+    shader->use();
+
     glLineWidth(5.0f);
 
     glBindVertexArray(coordVAO);
@@ -679,6 +668,171 @@ void drawCoordSystem(Shader* shader, unsigned int coordVAO, unsigned int coordEB
     glDrawElements(GL_LINES, numVertices, GL_UNSIGNED_INT, nullptr);
 
 }
+
+/*Polygon* drawPolygon2D(Shader* shader, float radius, int numSides, bool rotation, std::vector<float> rotationAxis,
+        float rotationAngle, std::vector<float> center, std::vector<float> colorRGB) {
+
+    shader->use();
+
+    float vertices[numSides * 6];
+    int indices[numSides];
+    int anglePart = 0;
+    std::vector<std::vector<float>> polygonVertices;
+
+    for(int i = 0; i < numSides * 6; i += 6) {
+        vertices[i] = center[0] + (float)(radius * cos(anglePart * 2 * PI / (float)numSides));
+        vertices[i + 1] = center[1] + (float)(radius * sin(anglePart * 2 * PI / (float)numSides));
+        vertices[i + 2] = center[2];
+        vertices[i + 3] = colorRGB[0];
+        vertices[i + 4] = colorRGB[1];
+        vertices[i + 5] = colorRGB[2];
+        if(i % 6 == 0) {
+            anglePart++;
+        }
+        polygonVertices.push_back({vertices[i], vertices[i + 1], vertices[i + 2]});
+    }
+
+    for(int i = 0; i < numSides; i++) {
+        indices[i] = i;
+    }
+
+    unsigned int cubeVAO, cubeVBO, cubeEBO;
+
+    glGenVertexArrays(1, &cubeVAO);
+    glBindVertexArray(cubeVAO);
+
+    glGenBuffers(1, &cubeVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
+
+    glGenBuffers(1, &cubeEBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_DYNAMIC_DRAW);
+
+    // position
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_TRUE, 6 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(0);
+
+    // color
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    glLineWidth(4.0f);
+
+    glBindVertexArray(cubeVAO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeEBO);
+
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+    glm::mat4 projection = glm::perspective(glm::radians(fov), (float)WIN_WIDTH / (float)WIN_HEIGHT, 0.1f, 100.0f);
+    shader->setMat4("projection", projection);
+
+    glm::mat4 view = camera.GetViewMatrix();
+    shader->setMat4("view", view);
+
+    glm::mat4 model = glm::mat4(1.0f);
+    if(rotation) {
+        // Rotating around the object's axis
+        model = glm::translate(model, glm::vec3(-12.25f, 0.0f, -12.25f));
+        model = glm::translate(model, glm::vec3(center[0], center[1], center[2]));
+        model = glm::rotate(model, glm::radians(rotationAngle), glm::vec3(rotationAxis[0], rotationAxis[1], rotationAxis[2]));
+        model = glm::translate(model, glm::vec3(-center[0], -center[1], -center[2]));
+        shader->setMat4("modelPolygon", model);
+    }
+    else {
+        model = glm::translate(model, glm::vec3(-12.25f, 0.0f, -12.25f));
+        shader->setMat4("modelPolygon", model);
+    }
+
+    glDrawElements(GL_LINE_LOOP, sizeof(vertices), GL_UNSIGNED_INT, nullptr);
+
+    return new Polygon(polygonVertices, numSides, {center[0], center[1], center[2]}, {colorRGB[0], colorRGB[1], colorRGB[2]});
+
+}*/
+
+/*void drawSphere(Shader* shader, float radius, std::vector<float> center, std::vector<float> colorRGB) {
+
+    int numRings = 12;
+    int numSides = 20;
+    float theta = 360 / numRings;
+    std::vector<Polygon*> polygons;
+    for(int i = 0; i < numRings; i++) {
+       polygons.push_back(drawPolygon2D(shader, radius, numSides, true, {1.0f, 0.0f, 0.0f}, i * theta, center, colorRGB));
+    }
+
+    //for(int i = 0; i < numSides; i++) {
+    //    linkTwoPolygons(shader, polygons[i], polygons[(i + 1) % numSides], numSides);
+    //}
+
+}*/
+
+// Polygons MUST have the same number of sides
+/*void linkTwoPolygons(Shader* shader, Polygon* p1, Polygon* p2, int numSides) {
+
+    std::vector<std::vector<float>> v1 = p1->getVertices();
+    std::vector<std::vector<float>> v2 = p2->getVertices();
+    std::vector<float> c1 = p1->getColor();
+    std::vector<float> c2 = p2->getColor();
+    float verticesPol[numSides * 12];
+    int indicesPol[numSides * 2];
+
+    for(int i = 0; i < numSides * 12; i += 12) {
+        verticesPol[i] = v1[i][0];
+        verticesPol[i + 1] = v1[i][1];
+        verticesPol[i + 2] = v1[i][2];
+        verticesPol[i + 3] = c1[0];
+        verticesPol[i + 4] = c1[1];
+        verticesPol[i + 5] = c1[2];
+        verticesPol[i + 6] = v2[i][0];
+        verticesPol[i + 7] = v2[i][1];
+        verticesPol[i + 8] = v2[i][2];
+        verticesPol[i + 9] = c2[0];
+        verticesPol[i + 10] = c2[1];
+        verticesPol[i + 11] = c2[2];
+    }
+
+    for(int i = 0; i < numSides * 2; i += 2) {
+        if(i == 0) {
+            indicesPol[0] = 0;
+            indicesPol[1] = 1;
+        }
+        else {
+            indicesPol[i] = indicesPol[i];
+            indicesPol[i + 1] = indicesPol[i] + 1;
+        }
+    }
+
+    unsigned int VAO, VBO, EBO;
+
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
+
+    glGenBuffers(1, &VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(verticesPol), verticesPol, GL_DYNAMIC_DRAW);
+
+    glGenBuffers(1, &EBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indicesPol), indicesPol, GL_DYNAMIC_DRAW);
+
+    // position
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_TRUE, 6 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(0);
+
+    // color
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    glLineWidth(4.0f);
+
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+    glDrawElements(GL_LINE_LOOP, sizeof(verticesPol), GL_UNSIGNED_INT, nullptr);
+
+}*/
 
 std::vector<Position*> getJointPositions(std::string fileName) {
 
