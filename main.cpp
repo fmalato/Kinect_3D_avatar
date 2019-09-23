@@ -8,7 +8,7 @@
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <GL/glut.h>
-#include <GL/freeglut.h>
+//#include <GL/freeglut.h>
 
 #include <iostream>
 #include <string>
@@ -28,7 +28,6 @@
 #include "Shader.h"
 #include "Camera.h"
 #include "Position.h"
-// #include "Polygon.h"
 
 #define PI 3.141592653
 
@@ -39,14 +38,15 @@ void scrollCallback(GLFWwindow* window, double offsetX, double offsetY);
 
 // drawing functions
 void drawGrid(Shader* shader, unsigned int gridVAO, unsigned int gridEBO, int numVertices);
-void drawCube(Shader* shader, std::vector<float> center, float sideLength, std::vector<float> colorRGB);
+void drawParallelogram(Shader* shader, std::vector<float> center1, std::vector<float> center2,
+        std::vector<float> colorRGB, float baseSide);
 void drawCoordSystem(Shader* shader, unsigned int coordVAO, unsigned int coordEBO, int numVertices);
 void drawSkeleton(Shader* shader, std::vector<Position*> allInterPos, int skeletonFrame, std::vector<float> colorRGB);
 void drawSkeletonRealtime(Shader* shader, std::vector<Joint*> joints, std::vector<float> colorRGB);
-/*Polygon* drawPolygon2D(Shader* shader, float radius, int numSides,  bool rotation, std::vector<float> rotationAxis,
-        float rotationAngle, std::vector<float> center, std::vector<float> colorRGB);*/
-void drawSphere(Shader* shader, float radius, std::vector<float> center, std::vector<float> colorRGB);
-//void linkTwoPolygons(Shader* shader, Polygon* p1, Polygon* p2, int numSides);
+void drawBody(Shader* shader, std::vector<float> joint1, std::vector<float> joint2, std::vector<float> joint3,
+              std::vector<float> joint4, std::vector<float> color);
+void drawSphere(std::vector<GLfloat> color, std::vector<GLdouble> position, float radius);
+void drawCube(std::vector<GLfloat> color, std::vector<GLdouble> position, float side);
 
 // data management functions
 std::vector<Position*> getJointPositions(std::string fileName);
@@ -71,6 +71,39 @@ float lastFrame = 0.0f;
 // a one-position buffer in case the MatLab KinectJointsRealtime.csv file is empty, used to make the skeleton stable.
 Position* lastKnownPos;
 int skeletonFrame = 0;
+unsigned int skeletonIndices[] = {
+
+        3, 2,        // HEAD - NECK
+        2, 20,       // NECK - SPINE
+
+        20, 4,       // SPINE - SHOULDER_LEFT
+        4, 5,        // SHOULDER_LEFT - ELBOW__LEFT
+        5, 6,        // ELBOW_LEFT - WRIST_LEFT
+        6, 22,       // WRIST_LEFT - THUMB_LEFT
+        6, 7,        // WRIST_LEFT - HAND_LEFT
+        7, 21,       // HAND_LEFT - HANF_TIP_LEFT
+
+        20, 8,       // SPINE - SHOULDER_RIGHT
+        8, 9,        // SHOULDER_RIGHT - ELBOW_RIGHT
+        9, 10,       // ELBOW_RIGHT - WRIST_RIGHT
+        10, 24,      // WRIST_RIGHT - THUMB_RIGHT
+        10, 11,      // WRIST_RIGHT - HAND_RIGHT
+        11, 23,      // HAND_RIGHT - HAND_TIP_RIGHT
+
+        20, 1,       // SPINE - SPINE_MID
+        1, 0,        // SPINE_MID - SPINE_BASE
+
+        0, 12,       // SPINE_BASE - HIP_LEFT
+        12, 13,      // HIP_LEFT - KNEE_LEFT
+        13, 14,      // KNEE_LEFT - ANKLE_LEFT
+        14, 15,      // ANKLE_LEFT - FOOT_LEFT
+
+        0, 16,       // SPINE_BASE - HIP_RIGHT
+        16, 17,      // HIP_RIGHT - KNEE_RIGHT
+        17, 18,      // KNEE_RIGHT - ANKLE_RIGHT
+        18, 19,      // ANKLE_RIGHT - FOOT_RIGHT
+
+};
 
 // a flag to decide whether to get realtime data or not
 bool realtime = false;
@@ -83,7 +116,7 @@ int main(int argcp, char **argv) {
         std::vector<Position *> positions = getJointPositions("../KinectJoints.csv");
 
         // Smoothing the animation
-        int times = 8;
+        int times = 10;
         int currentPos = 0;
         for(int i = 0; i < positions.size() - 1; i++) {
             std::cout << "interpolating between positions " << currentPos << " and " << currentPos + 1 << std::endl;
@@ -237,11 +270,11 @@ int main(int argcp, char **argv) {
 
     glPointSize(15.0f);
 
-    shader.use();
-
     double timerStart, timerEnd;
 
     while(!glfwWindowShouldClose(window)) {
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // NON REALTIME ANIMATION
         /** If you don't want a realtime animation, uncomment this and comment the 3* parts **/
@@ -273,8 +306,23 @@ int main(int argcp, char **argv) {
 
         drawGrid(&shader, gridVAO, gridEBO, sizeof(gridIndices));
         for(int i = 0; i < joints.size(); i++) {
-            drawCube(&shader, {joints[i]->getX() + 6, joints[i]->getY() + (float) 2.5, joints[i]->getZ() + 2}, 0.10, {1.0, 1.0, 1.0});
-            // drawSphere(&polygonShader, 0.1f, {joints[i]->getX() + 6, joints[i]->getY() + (float) 2.5, joints[i]->getZ() + 2}, {0.0f, 0.0f, 1.0f});
+            if(i != 1 && i != 2 && i != 3 && i != 22 && i != 24 && i != 11 && i != 7 && i != 21 && i != 23 && i != 6 && i != 10) {
+                drawSphere({0.1, 0.1, 0.7},
+                           {joints[i]->getX() + 6, joints[i]->getY() + (float) 2.5, joints[i]->getZ() + 2}, 0.15);
+            }
+            else if(i == 3) {
+                drawSphere({0.1, 0.1, 0.7},
+                           {joints[i]->getX() + 6, joints[i]->getY() + (float) 2.5, joints[i]->getZ() + 2}, 0.3);
+            }
+            else if(i == 22 || i == 24 || i == 11 || i == 7 || i == 21 || i == 23 || i == 6 || i == 10) {
+                drawSphere({0.1, 0.1, 0.7},
+                           {joints[i]->getX() + 6, joints[i]->getY() + (float) 2.5, joints[i]->getZ() + 2}, 0.075);
+            }
+        }
+        for(int j = 0; j < 48; j += 2) {
+            drawParallelogram(&polygonShader, {joints[skeletonIndices[j]]->getX() + 6, joints[skeletonIndices[j]]->getY() + (float) 2.5, joints[skeletonIndices[j]]->getZ() + 2},
+                              {joints[skeletonIndices[j + 1]]->getX() + 6, joints[skeletonIndices[j + 1]]->getY() + (float) 2.5, joints[skeletonIndices[j + 1]]->getZ() + 2},
+                              {1.0, 1.0, 0.0}, 0.1);
         }
         drawCoordSystem(&shader, coordVAO, coordEBO, sizeof(coordIndices));
         if(!realtime) {
@@ -283,18 +331,11 @@ int main(int argcp, char **argv) {
         else {
             drawSkeletonRealtime(&shader, joints, {1.0f, 0.0f, 0.0f});
         }
-
-        /*drawPolygon2D(&shader, 0.15, 20, false, {0.0f, 0.0f, 0.0f}, 0.0f,
-                {joints[11]->getX() + 6, joints[11]->getY() + (float) 2.5, joints[11]->getZ() + 2}, {0.0f, 1.0f, 0.0f});
-        drawPolygon2D(&shader, 0.15, 20, false, {0.0f, 0.0f, 0.0f}, 0.0f,
-                {joints[7]->getX() + 6, joints[7]->getY() + (float) 2.5, joints[7]->getZ() + 2}, {0.0f, 1.0f, 0.0f});*/
-        // drawSphere(&polygonShader, 1.0, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 1.0f});
-
-        glColor3f(1.0f, 0.0f, 0.0f);
-        glPushMatrix();
-        glTranslated(2.0, 2.0, 2.0);
-        glutSolidSphere(1, 50, 50);
-        glPopMatrix();
+        drawBody(&polygonShader, {joints[4]->getX() + 6, joints[4]->getY() +(float)2.5, joints[4]->getZ() +2},
+                 {joints[8]->getX() + 6, joints[8]->getY() +(float)2.5, joints[8]->getZ() +2},
+                 {joints[12]->getX() + 6, joints[12]->getY() +(float)2.5, joints[12]->getZ() +2},
+                 {joints[16]->getX() + 6, joints[16]->getY() +(float)2.5, joints[16]->getZ() +2},
+                 {0.0, 1.0, 0.0});
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -302,13 +343,11 @@ int main(int argcp, char **argv) {
         /** If you don't want a realtime animation, uncomment this and comment the 3* parts **/
         if(!realtime) {
             timerEnd = glfwGetTime();
-            if (timerEnd - timerStart < 1 / (double) 60) {
+            if (timerEnd - timerStart < 1 / (double)60) {
                 sleep(1 - (timerEnd - timerStart));
                 skeletonFrame++;
             }
-            else {
-                skeletonFrame++;
-            }
+
         }
         /*** Comment this far ***/
 
@@ -402,15 +441,18 @@ void drawGrid(Shader* shader, unsigned int gridVAO, unsigned int gridEBO, int nu
     }
 }
 
-void drawCube(Shader* shader, std::vector<float> center, float sideLength, std::vector<float> colorRGB) {
+void drawParallelogram(Shader* shader, std::vector<float> center1, std::vector<float> center2,
+        std::vector<float> colorRGB, float baseSide) {
 
     shader->use();
 
-    GLfloat centerX = center[0];
-    GLfloat centerY = center[1];
-    GLfloat centerZ = center[2];
+    GLfloat center1X = center1[0];
+    GLfloat center1Y = center1[1];
+    GLfloat center1Z = center1[2];
 
-    GLfloat halfSide = sideLength * (GLfloat)0.5;
+    GLfloat center2X = center2[0];
+    GLfloat center2Y = center2[1];
+    GLfloat center2Z = center2[2];
 
     GLfloat colorR = colorRGB[0];
     GLfloat colorG = colorRGB[1];
@@ -420,15 +462,15 @@ void drawCube(Shader* shader, std::vector<float> center, float sideLength, std::
     float cubeVertices[] {
 
             // position                                                    // color
-            centerX - halfSide, centerY - halfSide, centerZ + halfSide,    colorR, colorG, colorB,
-            centerX + halfSide, centerY - halfSide, centerZ + halfSide,    colorR, colorG, colorB,
-            centerX + halfSide, centerY + halfSide, centerZ + halfSide,    colorR, colorG, colorB,
-            centerX - halfSide, centerY + halfSide, centerZ + halfSide,    colorR, colorG, colorB,
+            center1X - baseSide, center1Y - baseSide, center1Z + baseSide,    colorR, colorG, colorB,
+            center1X + baseSide, center1Y - baseSide, center1Z + baseSide,    colorR, colorG, colorB,
+            center1X + baseSide, center1Y - baseSide, center1Z - baseSide,    colorR, colorG, colorB,
+            center1X - baseSide, center1Y - baseSide, center1Z - baseSide,    colorR, colorG, colorB,
 
-            centerX - halfSide, centerY - halfSide, centerZ - halfSide,    colorR, colorG, colorB,
-            centerX + halfSide, centerY - halfSide, centerZ - halfSide,    colorR, colorG, colorB,
-            centerX + halfSide, centerY + halfSide, centerZ - halfSide,    colorR, colorG, colorB,
-            centerX - halfSide, centerY + halfSide, centerZ - halfSide,    colorR, colorG, colorB,
+            center2X - baseSide, center2Y - baseSide, center2Z + baseSide,    colorR, colorG, colorB,
+            center2X + baseSide, center2Y - baseSide, center2Z + baseSide,    colorR, colorG, colorB,
+            center2X + baseSide, center2Y - baseSide, center2Z - baseSide,    colorR, colorG, colorB,
+            center2X - baseSide, center2Y - baseSide, center2Z - baseSide,    colorR, colorG, colorB,
 
     };
 
@@ -477,7 +519,91 @@ void drawCube(Shader* shader, std::vector<float> center, float sideLength, std::
 
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
+    glm::mat4 view = camera.GetViewMatrix();
+    shader->setMat4("view", view);
+
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3(-12.5f, 0.0f, -12.5f));
+    shader->setMat4("modelPolygon", model);
+
     glDrawElements(GL_TRIANGLES, sizeof(cubeVertices), GL_UNSIGNED_INT, nullptr);
+
+}
+
+void drawBody(Shader* shader, std::vector<float> joint1, std::vector<float> joint2, std::vector<float> joint3,
+              std::vector<float> joint4, std::vector<float> color) {
+
+    shader->use();
+
+    float depth = 0.15;
+
+    float bodyVertices[] = {
+
+        joint1[0], joint1[1], joint1[2] + depth,   color[0], color[1], color[2],
+        joint1[0], joint1[1], joint1[2] - depth,   color[0], color[1], color[2],
+        joint2[0], joint2[1], joint2[2] + depth,   color[0], color[1], color[2],
+        joint2[0], joint2[1], joint2[2] - depth,   color[0], color[1], color[2],
+
+        joint3[0], joint3[1], joint3[2] + depth,   color[0], color[1], color[2],
+        joint3[0], joint3[1], joint3[2] - depth,   color[0], color[1], color[2],
+        joint4[0], joint4[1], joint4[2] + depth,   color[0], color[1], color[2],
+        joint4[0], joint4[1], joint4[2] - depth,   color[0], color[1], color[2],
+
+    };
+
+    int bodyIndices[] {
+
+            0, 1, 2,    // front face
+            0, 2, 3,
+            4, 5, 6,    // back face
+            4, 6, 7,
+            2, 7, 3,    // upper face
+            2, 6, 7,
+            0, 1, 4,    // lower face
+            1, 5, 4,
+            4, 3, 7,    // left face
+            4, 0, 3,
+            1, 5, 2,    // right face
+            5, 6, 2
+
+    };
+
+    unsigned int VAO, VBO, EBO;
+
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
+
+    glGenBuffers(1, &VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(bodyVertices), bodyVertices, GL_DYNAMIC_DRAW);
+
+    glGenBuffers(1, &EBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(bodyIndices), bodyIndices, GL_DYNAMIC_DRAW);
+
+    // position
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_TRUE, 6 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(0);
+
+    // color
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    glLineWidth(4.0f);
+
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+    glm::mat4 view = camera.GetViewMatrix();
+    shader->setMat4("view", view);
+
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3(-12.5f, 0.0f, -12.5f));
+    shader->setMat4("modelPolygon", model);
+
+    glDrawElements(GL_TRIANGLES, sizeof(bodyVertices), GL_UNSIGNED_INT, nullptr);
 
 }
 
@@ -669,170 +795,59 @@ void drawCoordSystem(Shader* shader, unsigned int coordVAO, unsigned int coordEB
 
 }
 
-/*Polygon* drawPolygon2D(Shader* shader, float radius, int numSides, bool rotation, std::vector<float> rotationAxis,
-        float rotationAngle, std::vector<float> center, std::vector<float> colorRGB) {
+void drawSphere(std::vector<GLfloat> color, std::vector<GLdouble> position, float radius) {
 
-    shader->use();
+    const GLfloat* projection = glm::value_ptr(glm::perspective(glm::radians(fov), (float)WIN_WIDTH / (float)WIN_HEIGHT, 0.1f, 100.0f));
+    const GLfloat* view = glm::value_ptr(camera.GetViewMatrix());
 
-    float vertices[numSides * 6];
-    int indices[numSides];
-    int anglePart = 0;
-    std::vector<std::vector<float>> polygonVertices;
+    glUseProgram(0);
 
-    for(int i = 0; i < numSides * 6; i += 6) {
-        vertices[i] = center[0] + (float)(radius * cos(anglePart * 2 * PI / (float)numSides));
-        vertices[i + 1] = center[1] + (float)(radius * sin(anglePart * 2 * PI / (float)numSides));
-        vertices[i + 2] = center[2];
-        vertices[i + 3] = colorRGB[0];
-        vertices[i + 4] = colorRGB[1];
-        vertices[i + 5] = colorRGB[2];
-        if(i % 6 == 0) {
-            anglePart++;
-        }
-        polygonVertices.push_back({vertices[i], vertices[i + 1], vertices[i + 2]});
-    }
+    glPushMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glLoadMatrixf(projection);
 
-    for(int i = 0; i < numSides; i++) {
-        indices[i] = i;
-    }
+    glPushMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glLoadMatrixf(view);
 
-    unsigned int cubeVAO, cubeVBO, cubeEBO;
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glColor3f(color[0], color[1], color[2]);
 
-    glGenVertexArrays(1, &cubeVAO);
-    glBindVertexArray(cubeVAO);
+    glTranslated(position[0] - 12.25f, position[1], position[2] - 12.25f);
+    glutSolidSphere(radius, 50, 50);
+    glPopMatrix();
 
-    glGenBuffers(1, &cubeVBO);
-    glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
 
-    glGenBuffers(1, &cubeEBO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeEBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_DYNAMIC_DRAW);
+}
 
-    // position
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_TRUE, 6 * sizeof(float), nullptr);
-    glEnableVertexAttribArray(0);
+void drawCube(std::vector<GLfloat> color, std::vector<GLdouble> position, float side) {
 
-    // color
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
+    const GLfloat* projection = glm::value_ptr(glm::perspective(glm::radians(fov), (float)WIN_WIDTH / (float)WIN_HEIGHT, 0.1f, 100.0f));
+    const GLfloat* view = glm::value_ptr(camera.GetViewMatrix());
 
-    glLineWidth(4.0f);
+    glUseProgram(0);
 
-    glBindVertexArray(cubeVAO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeEBO);
+    glPushMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glLoadMatrixf(projection);
 
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glPushMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glLoadMatrixf(view);
 
-    glm::mat4 projection = glm::perspective(glm::radians(fov), (float)WIN_WIDTH / (float)WIN_HEIGHT, 0.1f, 100.0f);
-    shader->setMat4("projection", projection);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glColor3f(color[0], color[1], color[2]);
 
-    glm::mat4 view = camera.GetViewMatrix();
-    shader->setMat4("view", view);
+    glTranslated(position[0] - 12.25f, position[1], position[2] - 12.25f);
+    glutSolidCube(side);
+    glPopMatrix();
 
-    glm::mat4 model = glm::mat4(1.0f);
-    if(rotation) {
-        // Rotating around the object's axis
-        model = glm::translate(model, glm::vec3(-12.25f, 0.0f, -12.25f));
-        model = glm::translate(model, glm::vec3(center[0], center[1], center[2]));
-        model = glm::rotate(model, glm::radians(rotationAngle), glm::vec3(rotationAxis[0], rotationAxis[1], rotationAxis[2]));
-        model = glm::translate(model, glm::vec3(-center[0], -center[1], -center[2]));
-        shader->setMat4("modelPolygon", model);
-    }
-    else {
-        model = glm::translate(model, glm::vec3(-12.25f, 0.0f, -12.25f));
-        shader->setMat4("modelPolygon", model);
-    }
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
 
-    glDrawElements(GL_LINE_LOOP, sizeof(vertices), GL_UNSIGNED_INT, nullptr);
-
-    return new Polygon(polygonVertices, numSides, {center[0], center[1], center[2]}, {colorRGB[0], colorRGB[1], colorRGB[2]});
-
-}*/
-
-/*void drawSphere(Shader* shader, float radius, std::vector<float> center, std::vector<float> colorRGB) {
-
-    int numRings = 12;
-    int numSides = 20;
-    float theta = 360 / numRings;
-    std::vector<Polygon*> polygons;
-    for(int i = 0; i < numRings; i++) {
-       polygons.push_back(drawPolygon2D(shader, radius, numSides, true, {1.0f, 0.0f, 0.0f}, i * theta, center, colorRGB));
-    }
-
-    //for(int i = 0; i < numSides; i++) {
-    //    linkTwoPolygons(shader, polygons[i], polygons[(i + 1) % numSides], numSides);
-    //}
-
-}*/
-
-// Polygons MUST have the same number of sides
-/*void linkTwoPolygons(Shader* shader, Polygon* p1, Polygon* p2, int numSides) {
-
-    std::vector<std::vector<float>> v1 = p1->getVertices();
-    std::vector<std::vector<float>> v2 = p2->getVertices();
-    std::vector<float> c1 = p1->getColor();
-    std::vector<float> c2 = p2->getColor();
-    float verticesPol[numSides * 12];
-    int indicesPol[numSides * 2];
-
-    for(int i = 0; i < numSides * 12; i += 12) {
-        verticesPol[i] = v1[i][0];
-        verticesPol[i + 1] = v1[i][1];
-        verticesPol[i + 2] = v1[i][2];
-        verticesPol[i + 3] = c1[0];
-        verticesPol[i + 4] = c1[1];
-        verticesPol[i + 5] = c1[2];
-        verticesPol[i + 6] = v2[i][0];
-        verticesPol[i + 7] = v2[i][1];
-        verticesPol[i + 8] = v2[i][2];
-        verticesPol[i + 9] = c2[0];
-        verticesPol[i + 10] = c2[1];
-        verticesPol[i + 11] = c2[2];
-    }
-
-    for(int i = 0; i < numSides * 2; i += 2) {
-        if(i == 0) {
-            indicesPol[0] = 0;
-            indicesPol[1] = 1;
-        }
-        else {
-            indicesPol[i] = indicesPol[i];
-            indicesPol[i + 1] = indicesPol[i] + 1;
-        }
-    }
-
-    unsigned int VAO, VBO, EBO;
-
-    glGenVertexArrays(1, &VAO);
-    glBindVertexArray(VAO);
-
-    glGenBuffers(1, &VBO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(verticesPol), verticesPol, GL_DYNAMIC_DRAW);
-
-    glGenBuffers(1, &EBO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indicesPol), indicesPol, GL_DYNAMIC_DRAW);
-
-    // position
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_TRUE, 6 * sizeof(float), nullptr);
-    glEnableVertexAttribArray(0);
-
-    // color
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    glLineWidth(4.0f);
-
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
-    glDrawElements(GL_LINE_LOOP, sizeof(verticesPol), GL_UNSIGNED_INT, nullptr);
-
-}*/
+}
 
 std::vector<Position*> getJointPositions(std::string fileName) {
 
