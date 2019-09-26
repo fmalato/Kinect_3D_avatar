@@ -38,8 +38,6 @@ void scrollCallback(GLFWwindow* window, double offsetX, double offsetY);
 
 // drawing functions
 void drawGrid(Shader* shader, unsigned int gridVAO, unsigned int gridEBO, int numVertices);
-void drawParallelogram(Shader* shader, std::vector<float> center1, std::vector<float> center2,
-        std::vector<float> colorRGB, float baseSide);
 void drawCoordSystem(Shader* shader, unsigned int coordVAO, unsigned int coordEBO, int numVertices);
 void drawSkeleton(Shader* shader, std::vector<Position*> allInterPos, int skeletonFrame, std::vector<float> colorRGB);
 void drawSkeletonRealtime(Shader* shader, std::vector<Joint*> joints, std::vector<float> colorRGB);
@@ -47,6 +45,8 @@ void drawBody(Shader* shader, std::vector<float> joint1, std::vector<float> join
               std::vector<float> joint4, std::vector<float> color);
 void drawSphere(std::vector<GLfloat> color, std::vector<GLdouble> position, float radius);
 void drawCube(std::vector<GLfloat> color, std::vector<GLdouble> position, float side);
+void drawCylinder(float pHeight, std::vector<float> center1, std::vector<float> center2, float bRadius, float tRadius,
+        std::vector<float> color);
 
 // data management functions
 std::vector<Position*> getJointPositions(std::string fileName);
@@ -58,7 +58,7 @@ const unsigned int WIN_WIDTH = 1920;
 const unsigned int WIN_HEIGHT = 1080;
 
 // Camera handling
-Camera camera(glm::vec3(0.0f, 5.0f, 3.0f));
+Camera camera(glm::vec3(0.0f, 5.0f, -14.0f));
 double lastX = (float)WIN_WIDTH / 2;
 double lastY = (float)WIN_HEIGHT / 2;
 bool firstMouse = true;
@@ -71,6 +71,7 @@ float lastFrame = 0.0f;
 // a one-position buffer in case the MatLab KinectJointsRealtime.csv file is empty, used to make the skeleton stable.
 Position* lastKnownPos;
 int skeletonFrame = 0;
+GLUquadricObj* quadric = gluNewQuadric();
 unsigned int skeletonIndices[] = {
 
         3, 2,        // HEAD - NECK
@@ -106,7 +107,7 @@ unsigned int skeletonIndices[] = {
 };
 
 // a flag to decide whether to get realtime data or not
-bool realtime = false;
+bool realtime = true;
 
 int main(int argcp, char **argv) {
 
@@ -168,7 +169,6 @@ int main(int argcp, char **argv) {
     glEnable(GL_DEPTH_TEST);
 
     Shader shader("../Shaders/vertexShader.vert", "../Shaders/fragmentShader.frag");
-    Shader polygonShader("../Shaders/polygonVertShader.vert", "../Shaders/polygonFragShader.frag");
 
     float currentFrame;
 
@@ -271,6 +271,10 @@ int main(int argcp, char **argv) {
     glPointSize(15.0f);
 
     double timerStart, timerEnd;
+    float distance, bRadius, tRadius;
+    std::vector<float> color;
+
+    glm::vec3 pos = camera.Position;
 
     while(!glfwWindowShouldClose(window)) {
 
@@ -318,11 +322,57 @@ int main(int argcp, char **argv) {
                 drawSphere({0.1, 0.1, 0.7},
                            {joints[i]->getX() + 6, joints[i]->getY() + (float) 2.5, joints[i]->getZ() + 2}, 0.075);
             }
+            else if(i == 0 || i == 1) {
+                drawSphere({0.0, 1.0, 0.0},
+                           {joints[i]->getX() + 6, joints[i]->getY() + (float) 2.5, joints[i]->getZ() + 2}, 0.1);
+            }
+            else {
+                drawSphere({1.0, 1.0, 0.0},
+                           {joints[i]->getX() + 6, joints[i]->getY() + (float) 2.5, joints[i]->getZ() + 2}, 0.1);
+            }
         }
         for(int j = 0; j < 48; j += 2) {
-            drawParallelogram(&polygonShader, {joints[skeletonIndices[j]]->getX() + 6, joints[skeletonIndices[j]]->getY() + (float) 2.5, joints[skeletonIndices[j]]->getZ() + 2},
-                              {joints[skeletonIndices[j + 1]]->getX() + 6, joints[skeletonIndices[j + 1]]->getY() + (float) 2.5, joints[skeletonIndices[j + 1]]->getZ() + 2},
-                              {1.0, 1.0, 0.0}, 0.1);
+            distance = (float)sqrt(pow(joints[skeletonIndices[j + 1]]->getX() - joints[skeletonIndices[j]]->getX(), 2) +
+                    pow(joints[skeletonIndices[j + 1]]->getY() - joints[skeletonIndices[j]]->getY(), 2) +
+                    pow(joints[skeletonIndices[j + 1]]->getZ() - joints[skeletonIndices[j]]->getZ(), 2));
+            if(skeletonIndices[j + 1] == 6 || skeletonIndices[j + 1] == 10) {
+                bRadius = 0.05f;
+                tRadius = 0.1f;
+            }
+            else if(skeletonIndices[j + 1] == 11 || skeletonIndices[j + 1] == 24 || skeletonIndices[j + 1] == 23 ||
+                    skeletonIndices[j + 1] == 7 || skeletonIndices[j + 1] == 21 || skeletonIndices[j + 1] == 22) {
+                bRadius = 0.05f;
+                tRadius = 0.05f;
+            }
+            else if(skeletonIndices[j + 1] == 17 || skeletonIndices[j + 1] == 13) {
+                bRadius = 0.115f;
+                tRadius = 0.15f;
+            }
+            else if(skeletonIndices[j + 1] == 14 || skeletonIndices[j + 1] == 18) {
+                bRadius = 0.09f;
+                tRadius = 0.115f;
+            }
+            else{
+                bRadius = 0.1f;
+                tRadius = 0.1f;
+            }
+            if(skeletonIndices[j + 1] == 4 || skeletonIndices[j + 1] == 8 || skeletonIndices[j + 1] == 12 ||
+                    skeletonIndices[j + 1] == 16 || skeletonIndices[j + 1] == 1 || skeletonIndices[j + 1] == 0) {
+                color = {0.0f, 1.0f, 0.0f};
+            }
+            else {
+                color = {1.0f, 1.0f, 0.0f};
+            }
+            drawCylinder(distance, joints[skeletonIndices[j]]->getCoordinates(), joints[skeletonIndices[j + 1]]->getCoordinates(),
+                    bRadius, tRadius, color);
+            distance = (float)sqrt(pow(joints[8]->getX() - joints[16]->getX(), 2) +
+                                  pow(joints[8]->getY() - joints[16]->getY(), 2) +
+                                  pow(joints[8]->getZ() - joints[16]->getZ(), 2));
+            drawCylinder(distance, joints[8]->getCoordinates(), joints[16]->getCoordinates(), 0.1f, 0.1f, {0.0f, 1.0f, 0.0f});
+            distance = (float)sqrt(pow(joints[4]->getX() - joints[12]->getX(), 2) +
+                                   pow(joints[4]->getY() - joints[12]->getY(), 2) +
+                                   pow(joints[4]->getZ() - joints[12]->getZ(), 2));
+            drawCylinder(distance, joints[4]->getCoordinates(), joints[12]->getCoordinates(), 0.1f, 0.1f, {0.0f, 1.0f, 0.0f});
         }
         drawCoordSystem(&shader, coordVAO, coordEBO, sizeof(coordIndices));
         if(!realtime) {
@@ -331,11 +381,6 @@ int main(int argcp, char **argv) {
         else {
             drawSkeletonRealtime(&shader, joints, {1.0f, 0.0f, 0.0f});
         }
-        drawBody(&polygonShader, {joints[4]->getX() + 6, joints[4]->getY() +(float)2.5, joints[4]->getZ() +2},
-                 {joints[8]->getX() + 6, joints[8]->getY() +(float)2.5, joints[8]->getZ() +2},
-                 {joints[12]->getX() + 6, joints[12]->getY() +(float)2.5, joints[12]->getZ() +2},
-                 {joints[16]->getX() + 6, joints[16]->getY() +(float)2.5, joints[16]->getZ() +2},
-                 {0.0, 1.0, 0.0});
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -441,92 +486,38 @@ void drawGrid(Shader* shader, unsigned int gridVAO, unsigned int gridEBO, int nu
     }
 }
 
-void drawParallelogram(Shader* shader, std::vector<float> center1, std::vector<float> center2,
-        std::vector<float> colorRGB, float baseSide) {
+void drawCylinder(float pHeight, std::vector<float> center1, std::vector<float> center2, float bRadius, float tRadius,
+        std::vector<float> color) {
 
-    shader->use();
+    const GLfloat* projection = glm::value_ptr(glm::perspective(glm::radians(fov), (float)WIN_WIDTH / (float)WIN_HEIGHT, 0.1f, 100.0f));
+    const GLfloat* view = glm::value_ptr(camera.GetViewMatrix());
 
-    GLfloat center1X = center1[0];
-    GLfloat center1Y = center1[1];
-    GLfloat center1Z = center1[2];
+    glm::vec3 z = glm::vec3(0.0f, 0.0f, 1.0f);
+    glm::vec3 diff = glm::vec3(center1[0] - center2[0], center1[1] - center2[1], center1[2] - center2[2]);
+    glm::vec3 cross = glm::cross(z, diff);
 
-    GLfloat center2X = center2[0];
-    GLfloat center2Y = center2[1];
-    GLfloat center2Z = center2[2];
+    double angle = 180 / PI * acos(glm::dot(z, diff) / glm::length(diff));
 
-    GLfloat colorR = colorRGB[0];
-    GLfloat colorG = colorRGB[1];
-    GLfloat colorB = colorRGB[2];
+    glUseProgram(0);
 
+    glPushMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glLoadMatrixf(projection);
 
-    float cubeVertices[] {
-
-            // position                                                    // color
-            center1X - baseSide, center1Y - baseSide, center1Z + baseSide,    colorR, colorG, colorB,
-            center1X + baseSide, center1Y - baseSide, center1Z + baseSide,    colorR, colorG, colorB,
-            center1X + baseSide, center1Y - baseSide, center1Z - baseSide,    colorR, colorG, colorB,
-            center1X - baseSide, center1Y - baseSide, center1Z - baseSide,    colorR, colorG, colorB,
-
-            center2X - baseSide, center2Y - baseSide, center2Z + baseSide,    colorR, colorG, colorB,
-            center2X + baseSide, center2Y - baseSide, center2Z + baseSide,    colorR, colorG, colorB,
-            center2X + baseSide, center2Y - baseSide, center2Z - baseSide,    colorR, colorG, colorB,
-            center2X - baseSide, center2Y - baseSide, center2Z - baseSide,    colorR, colorG, colorB,
-
-    };
-
-    unsigned int cubeIndices[] = {
-
-            0, 1, 2,    // front face
-            0, 2, 3,
-            4, 5, 6,    // back face
-            4, 6, 7,
-            2, 7, 3,    // upper face
-            2, 6, 7,
-            0, 1, 4,    // lower face
-            1, 5, 4,
-            4, 3, 7,    // left face
-            4, 0, 3,
-            1, 5, 2,    // right face
-            5, 6, 2
-
-    };
-
-    unsigned int cubeVAO, cubeVBO, cubeEBO;
-
-    glGenVertexArrays(1, &cubeVAO);
-    glBindVertexArray(cubeVAO);
-
-    glGenBuffers(1, &cubeVBO);
-    glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_DYNAMIC_DRAW);
-
-    glGenBuffers(1, &cubeEBO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeEBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), cubeIndices, GL_DYNAMIC_DRAW);
-
-    // position
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_TRUE, 6 * sizeof(float), nullptr);
-    glEnableVertexAttribArray(0);
-
-    // color
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    glLineWidth(4.0f);
-
-    glBindVertexArray(cubeVAO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeEBO);
+    glPushMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glLoadMatrixf(view);
 
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glColor3f(color[0], color[1], color[2]);
+    glTranslated(center2[0] - 12.25f, (center2[1]) + 0.0f, (center2[2]) - 12.25f);
+    glRotated(angle, cross.x, cross.y, cross.z);
+    gluQuadricOrientation(quadric, GLU_OUTSIDE);
+    gluCylinder(quadric, bRadius, tRadius, pHeight, 32, 32);
+    glPopMatrix();
 
-    glm::mat4 view = camera.GetViewMatrix();
-    shader->setMat4("view", view);
-
-    glm::mat4 model = glm::mat4(1.0f);
-    model = glm::translate(model, glm::vec3(-12.5f, 0.0f, -12.5f));
-    shader->setMat4("modelPolygon", model);
-
-    glDrawElements(GL_TRIANGLES, sizeof(cubeVertices), GL_UNSIGNED_INT, nullptr);
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
 
 }
 
@@ -539,15 +530,15 @@ void drawBody(Shader* shader, std::vector<float> joint1, std::vector<float> join
 
     float bodyVertices[] = {
 
-        joint1[0], joint1[1], joint1[2] + depth,   color[0], color[1], color[2],
-        joint1[0], joint1[1], joint1[2] - depth,   color[0], color[1], color[2],
-        joint2[0], joint2[1], joint2[2] + depth,   color[0], color[1], color[2],
-        joint2[0], joint2[1], joint2[2] - depth,   color[0], color[1], color[2],
+            joint1[0] + depth, joint1[1], joint1[2] - depth,   color[0], color[1], color[2],
+            joint1[0] - depth, joint1[1], joint1[2] - depth,   color[0], color[1], color[2],
+            joint2[0] - depth, joint2[1], joint2[2] + depth,   color[0], color[1], color[2],
+            joint2[0] + depth, joint2[1], joint2[2] + depth,   color[0], color[1], color[2],
 
-        joint3[0], joint3[1], joint3[2] + depth,   color[0], color[1], color[2],
-        joint3[0], joint3[1], joint3[2] - depth,   color[0], color[1], color[2],
-        joint4[0], joint4[1], joint4[2] + depth,   color[0], color[1], color[2],
-        joint4[0], joint4[1], joint4[2] - depth,   color[0], color[1], color[2],
+            joint3[0] + depth, joint3[1], joint3[2] - depth,   color[0], color[1], color[2],
+            joint3[0] - depth, joint3[1], joint3[2] - depth,   color[0], color[1], color[2],
+            joint4[0] - depth, joint4[1], joint4[2] + depth,   color[0], color[1], color[2],
+            joint4[0] + depth, joint4[1], joint4[2] + depth,   color[0], color[1], color[2],
 
     };
 
@@ -600,7 +591,7 @@ void drawBody(Shader* shader, std::vector<float> joint1, std::vector<float> join
     shader->setMat4("view", view);
 
     glm::mat4 model = glm::mat4(1.0f);
-    model = glm::translate(model, glm::vec3(-12.5f, 0.0f, -12.5f));
+    //model = glm::translate(model, glm::vec3(-12.5f, 0.0f, -12.5f));
     shader->setMat4("modelPolygon", model);
 
     glDrawElements(GL_TRIANGLES, sizeof(bodyVertices), GL_UNSIGNED_INT, nullptr);
@@ -683,7 +674,7 @@ void drawSkeleton(Shader* shader, std::vector<Position*> allInterPos, int skelet
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    glLineWidth(7.0f);
+    glLineWidth(20.0f);
 
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
@@ -921,12 +912,17 @@ std::vector<Position*> getJointPositionsRealtime(std::string fileName) {
             }
 
             for(int i = 0; i < row.size(); i += 75) {
-                auto* position = new Position();
+                auto position = new Position();
                 for(int j = 0; j < 75; j += 3) {
                     // Doubling to make the skeleton bigger and hence more visible
-                    position->add(new Joint(2 * (float)std::stod(row[i + j]),
-                                            2 * (float)std::stod(row[i + j + 1]),
-                                            2 * (float)std::stod(row[i + j + 2])));
+                    try {
+                        // TODO: check if you can synchronize the MAtLab script with the C++ code
+                        position->add(new Joint(2 * (float) std::stod(row[i + j]),
+                                                2 * (float) std::stod(row[i + j + 1]),
+                                                2 * (float) std::stod(row[i + j + 2])));
+                    } catch(std::exception e) {
+                        e.what();
+                    }
                 }
                 positions.push_back(position);
                 if(position->getJointsSize() != 0) {

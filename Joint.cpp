@@ -28,4 +28,8 @@ void Joint::setX(float x) {
     Joint::x = x;
 }
 
+std::vector<float> Joint::getCoordinates() {
+    return {this->x + 6, this->y + (float)2.5, this->z + 2};
+}
+
 

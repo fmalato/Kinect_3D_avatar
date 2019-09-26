@@ -35,6 +35,8 @@ public:
 
     void setZ(float z);
 
+    std::vector<float> getCoordinates();
+
 };
 
 
